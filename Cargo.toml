@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "afb-types",
+    "iso-15118",
+    "afb-binding",
+    "afb-test",
+]
+

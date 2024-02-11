@@ -1,0 +1,48 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Native 'afb-iso15118'",
+            "type": "lldb",
+            "preLaunchTask": "iso15118-native-build",
+            "request": "launch",
+            "program": "afb-binder",
+            "env": {
+                "LD_LIBRARY_PATH": "/usr/local/lib64"
+            },
+            "args": [
+                "-v","--monitoring",
+                "--trap-faults=0",
+                "--config=afb-binding/etc/binder-iso15118.json",
+                "--config=afb-binding/etc/binding-iso15118.json",
+            ],
+            "cwd": "${workspaceFolder}",
+            "initCommands": [
+                "target stop-hook add -n _start -o continue",
+                "settings set target.disable-aslr false"
+            ]
+        },
+                {
+            "name": "Test 'afb-iso15118'",
+            "type": "lldb",
+            "preLaunchTask": "iso15118-test-build",
+            "request": "launch",
+            "program": "afb-binder",
+            "env": {
+                "LD_LIBRARY_PATH": "/usr/local/lib64"
+            },
+            "args": [
+                "-v","--monitoring",
+                "--trap-faults=0",
+                "--config=afb-binding/etc/binder-iso15118.json",
+                "--config=afb-binding/etc/binding-iso15118.json",
+                "--config=afb-test/etc/binding-iso15118-test.json",
+            ],
+            "cwd": "${workspaceFolder}",
+            "initCommands": [
+                "target stop-hook add -n _start -o continue",
+                "settings set target.disable-aslr false"
+            ]
+        }
+    ]
+}

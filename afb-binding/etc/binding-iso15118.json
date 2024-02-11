@@ -1,0 +1,19 @@
+{
+    "binding": [
+        {
+            "uid": "iso-15118",
+            "api": "i15118",
+            "path": "${CARGO_TARGET_DIR}debug/libafb_iso15118.so",
+            "info": "RUST ISO-15118 API",
+            //"iface": "enp0s20f0u4u1",
+            "iface": "lo",
+            "sdp_port": 15118,
+            "tcp_port": 61341,
+            "tls_port": 64109,
+            "ip6_prefix": 0,
+            // use gen-cert.sh to generate development key
+            "tls_cert": "./afb-test/etc/_server-cert.crt",
+            "tls_key": "./afb-test/etc/_server-key.pem"
+        }
+    ]
+}
