@@ -593,7 +593,7 @@ impl GnuTlsSession {
             let status = cglue::gnutls_priority_set_direct(
                 xsession,
                 config.priority.as_ptr(),
-                error.as_mut_ptr() as *mut *const i8,
+                error.as_mut_ptr() as *mut *const raw::c_char,
             );
             let error = error.assume_init();
             if status < 0 {
