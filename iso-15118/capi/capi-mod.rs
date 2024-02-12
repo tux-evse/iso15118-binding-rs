@@ -103,10 +103,7 @@ pub fn get_iface_addrs(iface: &str, filter: u16) -> Result<IfaceAddr6, AfbError>
         Err(_) => return afb_error!("ipv6-iface-import", "fail to import iface:{}", iface),
     };
 
-    match unsafe { start.as_ref() } {
-        None => return afb_error!("ipv6-iface-empty", "no network interface"),
-        Some(_) => {}
-    };
+    match unsafe { start.as_ref() } {::std::os::raw::c_char
 
     let mut idx = 0;
     let mut next = start;
@@ -593,7 +590,7 @@ impl GnuTlsSession {
             let status = cglue::gnutls_priority_set_direct(
                 xsession,
                 config.priority.as_ptr(),
-                error.as_mut_ptr() as *mut *const i8,
+                error.as_mut_ptr() as *mut *const raw::c_char,
             );
             let error = error.assume_init();
             if status < 0 {
