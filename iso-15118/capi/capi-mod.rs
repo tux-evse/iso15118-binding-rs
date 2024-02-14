@@ -103,7 +103,7 @@ pub fn get_iface_addrs(iface: &str, filter: u16) -> Result<IfaceAddr6, AfbError>
         Err(_) => return afb_error!("ipv6-iface-import", "fail to import iface:{}", iface),
     };
 
-    match unsafe { start.as_ref() } {
+    match unsafe { start.as_ref()} {
         None => return afb_error!("ipv6-iface-empty", "no network interface"),
         Some(_) => {}
     };
