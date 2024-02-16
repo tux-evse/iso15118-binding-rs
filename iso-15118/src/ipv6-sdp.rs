@@ -178,11 +178,11 @@ impl SdpServer {
 
     pub fn read_request(&self) -> Result<SdpRequest, AfbError> {
         // read sdp request directly from byte buffer
-        let mut sdp_request = mem::MaybeUninit::<SdpMsgRqt>::uninit();
+        let sdp_request = mem::MaybeUninit::<SdpMsgRqt>::uninit();
+        let mut sdp_request= unsafe {sdp_request.assume_init()};
         let remote_addr6 = self
             .socket
             .recvfrom(unsafe { struct_as_u8(&mut sdp_request) })?;
-        let sdp_request= unsafe {sdp_request.assume_init()};
         sdp_request.header.check(SdpMsgType::Request)?;
 
         // request is valid, update remote source ipv6 addr

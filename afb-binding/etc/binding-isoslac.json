@@ -1,0 +1,16 @@
+{
+    "name": "afb-slac-test",
+    "monitoring": true,
+    "binding": [
+        {
+            "uid": "slac-api",
+            "api": "slac",
+            "event": "iso203",
+            "path": "$CARGO_TARGET_DIR/debug/libafb_slac.so",
+            "info": "RUST Slac ISO15118-3",
+            "iec_api": "am62x",
+            "iso_itf": "${IFACE_PEV}",
+            "timetic": 3
+        }
+    ]
+}

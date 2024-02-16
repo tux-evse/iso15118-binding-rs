@@ -9,8 +9,7 @@
  */
 
 use afbv4::prelude::*;
-use std::time::Duration;
-use typesv4::prelude::*;
+//use typesv4::prelude::*;
 
 // This rootv4 demonstrate how to test an external rootv4 that you load within the same afb-binder process and security context
 // It leverages test (Test Anything Protocol) that is compatible with redpesk testing report.
@@ -86,6 +85,7 @@ impl AfbApiControls for TapUserData {
 // -----------------------------------------
 pub fn binding_test_init(rootv4: AfbApiV4, jconf: JsoncObj) -> Result<&'static AfbApi, AfbError> {
     let uid = jconf.get::<&'static str>("uid")?;
+    let api = jconf.default::<&'static str>("api",uid)?;
     let target = jconf.get::<&'static str>("target")?;
     let iface = jconf.default::<&'static str>("iface","eth2")?;
 
@@ -99,6 +99,7 @@ pub fn binding_test_init(rootv4: AfbApiV4, jconf: JsoncObj) -> Result<&'static A
 
     afb_log_msg!(Notice, rootv4, "iso15118 test uid:{} target:{}", uid, target);
     let api = AfbApi::new(uid)
+        .set_name(api)
         .set_info("Testing iso15118 tap reporting")
         .require_api(target)
         .set_callback(Box::new(tap_config))

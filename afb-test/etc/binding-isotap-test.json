@@ -4,14 +4,14 @@
     "binding": [
         {
             "uid": "iso15118-test",
-            "api": "iso15118-test",
+            "api": "afb-test",
             "path": "${CARGO_TARGET_DIR}debug/examples/libiso15118_test.so",
             "info": "RUST iso15118-16 frontend client",
             "target": "i15118",
             "autostart": true,
-            "autoexit": true,
+            "autoexit": false,
             "output": "tap",
-            "iface": "enp0s20f0u4u1",
+            "iface": "${IFACE_EVSE}",
         }
     ]
 }

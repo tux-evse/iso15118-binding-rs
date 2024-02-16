@@ -148,7 +148,7 @@ pub fn get_iface_addrs(iface: &str, filter: u16) -> Result<IfaceAddr6, AfbError>
 
         // filter addrv6 (local-link=0xfe80)
         let addr_prefix = unsafe { cglue::htons(saddr.sin6_addr.__in6_u.__u6_addr16[0]) };
-        if filter != 0 || addr_prefix != filter {
+        if filter != 0 && addr_prefix != filter {
             next = ifa.ifa_next;
             continue;
         }
@@ -161,7 +161,7 @@ pub fn get_iface_addrs(iface: &str, filter: u16) -> Result<IfaceAddr6, AfbError>
         None => {
             return afb_error!(
                 "ipv6-iface-match",
-                "fail to find IPV6 iface:{} filter:{}",
+                "fail to find IPV6 iface:'{}' filter:'{}'",
                 iface,
                 filter
             )
