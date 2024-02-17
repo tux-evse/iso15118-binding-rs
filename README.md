@@ -39,8 +39,10 @@ wireshark -i veth-dbg
 ./afb-test/etc/start-iso15118-server.sh
 ```
 
-Warning: Slac require CAP_NET_RAW capability, check slac-binding-rs/README.md
+Warning:
+ * Slac require CAP_NET_RAW capability, check slac-binding-rs/README.md
 for further information.
+ * Firewall: you should open USP port 15118 and allow ipv6:multicast both on your target and on your development Desktop.
 ```
 sudo setcap cap_net_raw+eip /usr/local/bin/afb-binder
 ```

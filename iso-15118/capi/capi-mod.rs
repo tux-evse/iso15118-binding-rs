@@ -168,20 +168,6 @@ pub fn get_iface_addrs(iface: &str, filter: u16) -> Result<IfaceAddr6, AfbError>
     Ok(response)
 }
 
-// move host int16 to little indian
-pub fn _htole16(value: u16) -> u16 {
-    let indian: [u8; 2] = unsafe { mem::transmute(1 as u16) };
-    if indian[0] == 1 {
-        value
-    } else {
-        let input: [u8; 2] = unsafe { mem::transmute(value) };
-        let output: [u8; 2] = [input[1], input[0]];
-
-        let value: u16 = unsafe { mem::transmute(output) };
-        value
-    }
-}
-
 pub struct SocketSourceV6 {
     pub addr: cglue::sockaddr_in6,
 }

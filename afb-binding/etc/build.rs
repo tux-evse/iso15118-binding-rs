@@ -13,6 +13,7 @@ fn main() {
     println!("cargo:rustc-link-arg=-lgnutls");
     println!("cargo:rustc-link-arg=-liso15118");
 
+
     if let Ok(value) = env::var("CARGO_TARGET_DIR") {
         if let Ok(profile) = env::var("PROFILE") {
             println!("cargo:rustc-link-search=crate={}{}", value, profile);

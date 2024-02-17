@@ -43,7 +43,9 @@ fn async_sdp_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &mut AsyncSdpCtx) -> Result
         };
 
         match request.get_transport() {
-            SdpTransportProtocol::TCP => {}
+            SdpTransportProtocol::TCP => {
+                afb_log_msg!(Debug, None, "Received SDP-V2G request TCP:{}", port);
+            }
             SdpTransportProtocol::UDP => {
                 return afb_error!("sdp-request-udp", "currently not supported")
             }
@@ -51,6 +53,7 @@ fn async_sdp_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &mut AsyncSdpCtx) -> Result
 
         let response = SdpResponse::new(&ctx.addr_v6, port);
         response.send_response(&ctx.sdp)?;
+        afb_log_msg!(Debug, None, "Respond SDP-V2G pev-ipv6: [{:?}]", &ctx.addr_v6.addr);
     }
     Ok(())
 }
