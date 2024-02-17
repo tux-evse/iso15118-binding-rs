@@ -24,6 +24,10 @@
     html_favicon_url = "https://iot.bzh/images/defaults/favicon.ico"
 )]
 
+#[cfg(test)]
+#[path = "../test/encoder-test.rs"]
+mod test;
+
 #[cfg(not(afbv4))]
 extern crate afbv4;
 

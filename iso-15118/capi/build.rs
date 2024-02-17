@@ -12,6 +12,8 @@ fn main() {
     // invalidate the built crate whenever the wrapper changes
     println!("cargo:rerun-if-changed=capi/capi-map.h");
     println!("cargo:rustc-link-search=/usr/local/lib64");
+    println!("cargo:rustc-link-arg=-liso15118");
+
     if let Ok(value) = env::var("CARGO_TARGET_DIR") {
         if let Ok(profile) = env::var("PROFILE") {
             println!("cargo:rustc-link-search=crate={}{}", value, profile);
@@ -49,9 +51,12 @@ fn main() {
         .allowlist_function("sendto")
         .allowlist_function("inet_ntop")
         .allowlist_function("hton.*")
+        .allowlist_function("ntoh.*")
         .allowlist_function(".*ifaddrs")
         .allowlist_function("gnutls_.*")
+        .allowlist_function("sdp_v2g_.*")
         .allowlist_type("gnutls_.*")
+        .allowlist_var("SDP_.*")
         .generate()
         .expect("Unable to generate libcapi");
 

@@ -33,21 +33,24 @@ fn buffer_to_str(buffer: &[u8]) -> Result<&str, AfbError> {
 AfbEvtFdRegister!(AsyncSdpCb, async_sdp_cb, AsyncSdpCtx);
 fn async_sdp_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &mut AsyncSdpCtx) -> Result<(), AfbError> {
     if revent == AfbEvtFdPoll::IN.bits() {
-        let payload = ctx.sdp.read_request()?;
+        let buffer = ctx.sdp.read_buffer()?;
+        let request= SdpRequest::new(&buffer)?;
+        request.check_header()?;
 
-        let port = match payload.security {
+        let port = match request.get_security() {
             SdpSecurityModel::TLS => ctx.tls_port,
             SdpSecurityModel::NONE => ctx.tcp_port,
         };
 
-        match payload.transport {
+        match request.get_transport() {
             SdpTransportProtocol::TCP => {}
             SdpTransportProtocol::UDP => {
                 return afb_error!("sdp-request-udp", "currently not supported")
             }
         }
-        ctx.sdp
-            .send_response(SdpResponse::new(&ctx.addr_v6, port))?;
+
+        let response = SdpResponse::new(&ctx.addr_v6, port);
+        response.send_response(&ctx.sdp)?;
     }
     Ok(())
 }

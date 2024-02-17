@@ -17,18 +17,18 @@ use afbv4::prelude::*;
 use std::cell::{RefCell, RefMut};
 use std::mem;
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum SdpSecurityModel {
-    TLS = 0x00,
-    NONE = 0x10,
+    TLS = cglue::SDP_V2G_SECURITY_TLS,
+    NONE = cglue::SDP_V2G_SECURITY_NONE,
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum SdpTransportProtocol {
-    TCP = 0x00,
-    UDP = 0x10,
+    TCP = cglue::SDP_V2G_TRANSPORT_TCP,
+    UDP = cglue::SDP_V2G_TRANSPORT_UDP,
 }
 
 pub struct SdpState {
@@ -40,81 +40,81 @@ pub enum SdpMsgType {
     Response,
 }
 
-pub struct SdpMsgHeader {
-    version_std: u8,
-    version_not: u8,
-    msg_type: u16,
-    msg_len: u32,
-}
-
-impl SdpMsgHeader {
-    pub fn new(sdp_msg: SdpMsgType) -> Self {
-        let (sdp_type, sdp_len) = match sdp_msg {
-            SdpMsgType::Request => (V2G_SDP_REQUEST_TYPE, V2G_SDP_REQUEST_LEN),
-            SdpMsgType::Response => (V2G_SDP_RESPONSE_TYPE, V2G_SDP_RESPONSE_LEN),
-        };
-        SdpMsgHeader {
-            version_std: V2G_SDP_VERSION,
-            version_not: V2G_SDP_VERSION_NOT,
-            msg_type: unsafe { cglue::htons(sdp_type) },
-            msg_len: unsafe { cglue::htonl(sdp_len) },
-        }
-    }
-
-    pub fn check(&self, sdp_msg: SdpMsgType) -> Result<(), AfbError> {
-        let (sdp_type, sdp_len) = match sdp_msg {
-            SdpMsgType::Request => (V2G_SDP_REQUEST_TYPE, V2G_SDP_REQUEST_LEN),
-            SdpMsgType::Response => (V2G_SDP_RESPONSE_TYPE, V2G_SDP_RESPONSE_LEN),
-        };
-
-        if self.version_std != V2G_SDP_VERSION || self.version_not != V2G_SDP_VERSION_NOT {
-            return afb_error!(
-                "Sdp-request-check",
-                "invalid Sdp/SDP version expected:[{:#02x},{:#02x}] received:[{:#02x},{:#02x}]",
-                self.version_std,
-                self.version_not,
-                V2G_SDP_VERSION,
-                V2G_SDP_VERSION_NOT
-            );
-        }
-
-        let rqt_type = unsafe { cglue::htons(sdp_type) };
-        if self.msg_type != rqt_type {
-            return afb_error!(
-                "Sdp-request-check",
-                "invalid Sdp/SDP type expected:{:#04x} received:{:#04x}",
-                rqt_type,
-                self.msg_type
-            );
-        }
-
-        let rqt_len = unsafe { cglue::htonl(sdp_len) };
-        if self.msg_len != rqt_len {
-            return afb_error!(
-                "Sdp-request-check",
-                "invalid Sdp/SDP lenght expected:{} received:{}",
-                rqt_type,
-                self.msg_type
-            );
-        }
-        Ok(())
-    }
-}
+// payload buffer data type
+pub type SdpResponseBuffer = [u8; (cglue::SDP_V2G_RESPONSE_LEN + cglue::SDP_V2G_HEADER_LEN) as usize];
+pub type SdpRequestBuffer = [u8; (cglue::SDP_V2G_REQUEST_LEN + cglue::SDP_V2G_HEADER_LEN) as usize];
 
 pub struct SdpRequest {
-    pub security: SdpSecurityModel,
-    pub transport: SdpTransportProtocol,
+    payload: cglue::sdp_request,
 }
-// make sure Rust does not hack memory mapping
-#[repr(C, align(32))]
-pub (self) struct SdpMsgRqt {
-    header: SdpMsgHeader,
-    payload: SdpRequest,
+impl SdpRequest {
+    pub fn new(buffer: &SdpRequestBuffer) -> Result<Self, AfbError> {
+        let mut request = mem::MaybeUninit::<cglue::sdp_request>::uninit();
+        let status = unsafe {
+            cglue::sdp_v2g_decode_rqt(
+                buffer.as_ptr() as *mut u8,
+                buffer.len(),
+                request.as_mut_ptr(),
+            )
+        };
+        if status != 0 {
+            return afb_error!("sdp-response-encode", "fail to decode response");
+        }
+        let response = SdpRequest {
+            payload: unsafe { request.assume_init() },
+        };
+        Ok(response)
+    }
+
+    pub fn check_header(&self) -> Result<&Self, AfbError> {
+        let header = self.payload.header;
+        if header.version_std != cglue::SDP_V2G_VERSION
+            || header.version_not != cglue::SDP_V2G_VERSION_NOT
+        {
+            return afb_error!(
+                "sdp-request-header",
+                "invalid Sdp/SDP version expected:[{:#02x},{:#02x}] received:[{:#02x},{:#02x}]",
+                header.version_std,
+                header.version_not,
+                cglue::SDP_V2G_VERSION,
+                cglue::SDP_V2G_VERSION_NOT
+            );
+        }
+
+        if header.msg_type != cglue::SDP_V2G_REQUEST_TYPE {
+            return afb_error!(
+                "sdp-request-header",
+                "invalid Sdp/SDP type expected:{:#04x} received:{:#04x}",
+                cglue::SDP_V2G_REQUEST_TYPE,
+                header.msg_type
+            );
+        }
+
+        //let rqt_len = unsafe { cglue::ntohl(sdp_len) };
+        if header.msg_len != cglue::SDP_V2G_REQUEST_LEN {
+            return afb_error!(
+                "sdp-request-header",
+                "invalid Sdp/SDP lenght expected:{} received:{}",
+                cglue::SDP_V2G_REQUEST_LEN,
+                header.msg_type
+            );
+        }
+        Ok(self)
+    }
+
+    pub fn get_transport(&self) -> SdpTransportProtocol {
+        let transport = unsafe { mem::transmute(self.payload.transport) };
+        transport
+    }
+
+    pub fn get_security(&self) -> SdpSecurityModel {
+        let transport = unsafe { mem::transmute(self.payload.security) };
+        transport
+    }
 }
 
 pub struct SdpResponse {
-    pub addr: cglue::in6_addr,
-    pub port: cglue::in_port_t,
+    payload: cglue::sdp_response,
 }
 
 impl SdpResponse {
@@ -125,18 +125,41 @@ impl SdpResponse {
                 __u6_addr8: saddr.get_addr().octets(),
             },
         };
-        SdpResponse { port, addr }
+        SdpResponse {
+            payload: cglue::sdp_response {
+                header: cglue::sdp_msg_header {
+                    version_std: cglue::SDP_V2G_VERSION,
+                    version_not: cglue::SDP_V2G_VERSION_NOT,
+                    msg_len: cglue::SDP_V2G_RESPONSE_LEN,
+                    msg_type: cglue::SDP_V2G_RESPONSE_TYPE,
+                },
+                addr,
+                port,
+            },
+        }
     }
-}
+    pub fn encode(&self) -> Result<SdpResponseBuffer, AfbError> {
+        let mut buffer = mem::MaybeUninit::<SdpResponseBuffer>::uninit();
+        let status = unsafe {
+            cglue::sdp_v2g_encode_rsp(
+                &self.payload,
+                buffer.as_mut_ptr() as *mut u8,
+                mem::size_of::<SdpResponseBuffer>(),
+            )
+        };
+        if status != 0 {
+            return afb_error!("sdp-response-encode", "fail to encode response");
+        }
+        let buffer = unsafe { buffer.assume_init() };
+        Ok(buffer)
+    }
 
-#[allow(dead_code)]
-pub(self) struct SdpMsgRsp {
-    header: SdpMsgHeader,
-    payload: SdpResponse,
-}
+    pub fn send_response(&self, sdp: &SdpServer) -> Result<(), AfbError> {
+        let buffer = self.encode()?;
+        sdp.send_buffer(&buffer)?;
 
-unsafe fn struct_as_u8<T: Sized>(p: &mut T) -> &mut [u8] {
-    ::core::slice::from_raw_parts_mut((p as *mut T) as *mut u8, ::core::mem::size_of::<T>())
+        Ok(())
+    }
 }
 
 pub struct SdpServer {
@@ -156,7 +179,6 @@ impl SdpServer {
             socket,
             uid,
         };
-
         Ok(handle)
     }
 
@@ -176,37 +198,28 @@ impl SdpServer {
         }
     }
 
-    pub fn read_request(&self) -> Result<SdpRequest, AfbError> {
-        // read sdp request directly from byte buffer
-        let sdp_request = mem::MaybeUninit::<SdpMsgRqt>::uninit();
-        let mut sdp_request= unsafe {sdp_request.assume_init()};
-        let remote_addr6 = self
-            .socket
-            .recvfrom(unsafe { struct_as_u8(&mut sdp_request) })?;
-        sdp_request.header.check(SdpMsgType::Request)?;
-
-        // request is valid, update remote source ipv6 addr
-        let mut data_cell = self.get_cell()?;
-        data_cell.remote_addr6 = Some(remote_addr6);
-
-        Ok(sdp_request.payload)
-    }
-
-    pub fn send_response(&self, payload: SdpResponse) -> Result<(), AfbError> {
+    pub fn send_buffer(&self, buffer: &SdpResponseBuffer) -> Result<(), AfbError> {
         let data_cell = self.get_cell()?;
         let remote_addr6 = match &data_cell.remote_addr6 {
             Some(value) => value,
             None => return afb_error!("sdp-respose-state", "No destination defined"),
         };
 
-        let mut sdp_respone = SdpMsgRsp {
-            header: SdpMsgHeader::new(SdpMsgType::Response),
-            payload: payload,
-        };
-
-        self.socket
-            .sendto(unsafe { struct_as_u8(&mut sdp_respone) }, remote_addr6)?;
-
+        self.socket.sendto(buffer, remote_addr6)?;
         Ok(())
+    }
+
+    pub fn read_buffer(&self) -> Result<SdpRequestBuffer, AfbError> {
+        // read sdp request directly from byte buffer
+        let mut buffer = mem::MaybeUninit::<SdpRequestBuffer>::uninit();
+        let remote_addr6 = self
+            .socket
+            .recvfrom(buffer.as_mut_ptr() as *mut u8, mem::size_of::<SdpRequestBuffer>())?;
+
+        // request is valid, update remote source ipv6 addr
+        let mut data_cell = self.get_cell()?;
+        data_cell.remote_addr6 = Some(remote_addr6);
+
+        Ok(unsafe { buffer.assume_init() })
     }
 }

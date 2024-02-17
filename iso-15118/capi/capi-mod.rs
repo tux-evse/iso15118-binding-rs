@@ -60,18 +60,11 @@ use afbv4::prelude::*;
 
 pub const IP6_BROADCAST_ANY: [u8; cglue::C_INET6_ADDR_LEN] =
     [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01];
-//pub const INET6_ADDR_LEN: usize = cglue::C_INET6_ADDR_LEN;
-//pub const V2G_SDP_HEADER_LEN: usize = 8;
-pub const V2G_SDP_VERSION: u8 = 0x01;
-pub const V2G_SDP_VERSION_NOT: u8 = 0xfe;
-pub const V2G_SDP_REQUEST_LEN: u32 = 2;
-pub const V2G_SDP_RESPONSE_LEN: u32 = 20;
-pub const V2G_SDP_REQUEST_TYPE: u16 = 0x9000;
-pub const V2G_SDP_RESPONSE_TYPE: u16 = 0x9001;
+
 
 pub struct IfaceAddr6 {
-    addr: net::Ipv6Addr,
-    scope: u32,
+    pub addr: net::Ipv6Addr,
+    pub scope: u32,
 }
 
 impl IfaceAddr6 {
@@ -337,15 +330,15 @@ impl SocketSdpV6 {
         Ok(())
     }
 
-    pub fn recvfrom(&self, buffer: &mut [u8]) -> Result<SocketSourceV6, AfbError> {
+    pub fn recvfrom(&self, buffer: *mut u8, len: usize) -> Result<SocketSourceV6, AfbError> {
         let mut remote_addr6 = unsafe { mem::zeroed::<cglue::sockaddr_in6>() };
         let mut remote_len = cglue::C_INET6_ADDR_LEN;
 
         let count = unsafe {
             cglue::recvfrom(
                 self.sockfd,
-                buffer.as_ptr() as *const _ as *mut raw::c_void,
-                buffer.len(),
+                buffer as *mut raw::c_void,
+                len,
                 0,
                 &mut remote_addr6 as *const _ as *mut cglue::sockaddr,
                 &mut remote_len as *const _ as *mut cglue::socklen_t,

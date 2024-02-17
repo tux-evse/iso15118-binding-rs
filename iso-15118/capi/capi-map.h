@@ -37,6 +37,8 @@
 #include <gnutls/x509.h>
 #include <gnutls/crypto.h>
 
+#include <iso15118/sdp-v2g-encoders.h>
+
 const ushort C_AF_INET6 = AF_INET6;
 const int C_SOCK_DGRAM = SOCK_DGRAM;
 const int C_IPPROTO_UDP = IPPROTO_UDP;
