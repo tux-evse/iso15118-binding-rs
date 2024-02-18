@@ -77,8 +77,8 @@ pub struct TlsConfig {
 
 // Parse certificate keys
 impl TlsConfig {
-    pub fn new(cert_file: &str, key_file: &str, hostname: &'static str) -> Result<&'static Self, AfbError> {
-        let config = GnuTlsConfig::new(cert_file, key_file, hostname)?;
+    pub fn new(cert_file: &str, key_file: &str, key_pin: &str, hostname: &'static str) -> Result<&'static Self, AfbError> {
+        let config = GnuTlsConfig::new(cert_file, key_file, key_pin, hostname)?;
 
         let handle = Box::new(TlsConfig { gtls: config });
         Ok(Box::leak(handle))

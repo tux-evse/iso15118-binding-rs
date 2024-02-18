@@ -11,8 +11,9 @@
             "tcp_port": 61341,
             "tls_port": 64109,
             // use gen-cert.sh to generate development key
-            "tls_cert": "${PKI_TLS_DIR}/_server-cert.crt",
-            "tls_key": "${PKI_TLS_DIR}/_server-key.pem"
+            "tls_cert": "${PKI_TLS_DIR}/_trialog-secc-cert.pem",
+            "tls_key": "${PKI_TLS_DIR}/_trialog-secc-cert.key",
+            "tls_pin":"123456"
         }
     ]
 }

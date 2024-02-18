@@ -22,9 +22,9 @@
 use ::std::os::raw;
 use std::ffi::CStr;
 use std::ffi::CString;
+use std::fmt;
 use std::mem;
 use std::net;
-use std::fmt;
 
 const MAX_ERROR_LEN: usize = 256;
 pub mod cglue {
@@ -62,7 +62,6 @@ use afbv4::prelude::*;
 pub const IP6_BROADCAST_ANY: [u8; cglue::C_INET6_ADDR_LEN] =
     [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01];
 
-
 pub struct IfaceAddr6 {
     pub addr: net::Ipv6Addr,
     pub scope: u32,
@@ -97,7 +96,7 @@ pub fn get_iface_addrs(iface: &str, filter: u16) -> Result<IfaceAddr6, AfbError>
         Err(_) => return afb_error!("ipv6-iface-import", "fail to import iface:{}", iface),
     };
 
-    match unsafe { start.as_ref()} {
+    match unsafe { start.as_ref() } {
         None => return afb_error!("ipv6-iface-empty", "no network interface"),
         Some(_) => {}
     };
@@ -174,16 +173,16 @@ pub struct SocketSourceV6 {
 }
 
 impl fmt::Display for SocketSourceV6 {
-   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut text="ipv6:[".to_string();
-        for idx in 0 .. 8 {
-            let slot= unsafe {self.addr.sin6_addr.__in6_u.__u6_addr16[idx]};
-            let key= format!("{:#02x}:", unsafe{cglue::ntohs(slot)});
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut text = "ipv6:[".to_string();
+        for idx in 0..8 {
+            let slot = unsafe { self.addr.sin6_addr.__in6_u.__u6_addr16[idx] };
+            let key = format!("{:#02x}:", unsafe { cglue::ntohs(slot) });
             text.push_str(&key.as_str());
         }
         text.push_str("]");
-        write!(f, "{}",text)
-   }
+        write!(f, "{}", text)
+    }
 }
 
 pub struct SocketSdpV6 {
@@ -777,7 +776,12 @@ pub struct GnuTlsConfig {
     xcred: cglue::gnutls_certificate_credentials_t,
 }
 impl GnuTlsConfig {
-    pub fn new(cert_path: &str, key_path: &str, hostname: &'static str) -> Result<Self, AfbError> {
+    pub fn new(
+        cert_path: &str,
+        key_path: &str,
+        key_pin: &str,
+        hostname: &'static str,
+    ) -> Result<Self, AfbError> {
         const GNUTLS_PRIORITY: &str = "NORMAL:-VERS-TLS-ALL:+VERS-TLS1.2";
         const GNU_TLS_MIN_VER: &str = "3.4.6";
 
@@ -813,6 +817,17 @@ impl GnuTlsConfig {
             Err(_) => return afb_error!("gtls-client-cert", "fail to import cert:{}", cert_path),
         };
 
+        let glutls_pin = if key_pin == "" {
+            None
+        } else {
+            match CString::new(key_pin) {
+                Ok(value) => Some(value),
+                Err(_) => {
+                    return afb_error!("gtls-client-key", "fail to import pin:{}", key_pin);
+                }
+            }
+        };
+
         let xcred = unsafe {
             let mut cred = mem::MaybeUninit::<cglue::gnutls_certificate_credentials_t>::uninit();
             let status = cglue::gnutls_certificate_allocate_credentials(cred.as_mut_ptr());
@@ -829,12 +844,22 @@ impl GnuTlsConfig {
         };
 
         let status = unsafe {
-            cglue::gnutls_certificate_set_x509_key_file(
-                xcred,
-                glutls_cert.as_ptr(),
-                glutls_key.as_ptr(),
-                cglue::C_GNUTLS_X509_FMT_PEM,
-            )
+            match glutls_pin {
+                None => cglue::gnutls_certificate_set_x509_key_file(
+                    xcred,
+                    glutls_cert.as_ptr(),
+                    glutls_key.as_ptr(),
+                    cglue::C_GNUTLS_X509_FMT_PEM,
+                ),
+                Some(pin) => cglue::gnutls_certificate_set_x509_key_file2(
+                    xcred,
+                    glutls_cert.as_ptr(),
+                    glutls_key.as_ptr(),
+                    cglue::C_GNUTLS_X509_FMT_PEM,
+                    pin.as_ptr(),
+                    cglue::gnutls_pkcs_encrypt_flags_t_GNUTLS_PKCS_PLAIN,
+                ),
+            }
         };
 
         if status < 0 {

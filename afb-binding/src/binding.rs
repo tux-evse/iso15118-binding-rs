@@ -46,7 +46,10 @@ impl AfbApiControls for ApiUserData {
         AfbEvtFd::new(tls.get_uid())
             .set_fd(tls.get_sockfd())
             .set_events(AfbEvtFdPoll::IN)
-            .set_callback(Box::new(AsyncTlsCtx { tls, config: self.tls_conf }))
+            .set_callback(Box::new(AsyncTlsCtx {
+                tls,
+                config: self.tls_conf,
+            }))
             .start()?;
 
         // start SDP discovery service
@@ -84,12 +87,13 @@ pub fn binding_init(rootv4: AfbApiV4, jconf: JsoncObj) -> Result<&'static AfbApi
     let sdp_port = jconf.default::<u32>("sdp_port", 15118)? as u16;
     let tcp_port = jconf.default::<u32>("tcp_port", 61341)? as u16;
     let tls_port = jconf.default::<u32>("tls_port", 64109)? as u16;
-    let cert_file =jconf.get::<&str>("tls_cert")?;
-    let priv_key =jconf.get::<&str>("tls_key")?;
-    let hostname= jconf.default::<&'static str>("hostname","")?;
+    let cert_file = jconf.get::<&str>("tls_cert")?;
+    let priv_key = jconf.get::<&str>("tls_key")?;
+    let pin_key = jconf.get::<&str>("tls_pin")?;
+    let hostname = jconf.default::<&'static str>("hostname", "")?;
 
     // parse and load TLS certificates at binding init
-    let tls_conf= TlsConfig::new(cert_file, priv_key, hostname) ?;
+    let tls_conf = TlsConfig::new(cert_file, priv_key, pin_key, hostname)?;
 
     // register data converter
     iso15118_registers()?;
@@ -103,7 +107,7 @@ pub fn binding_init(rootv4: AfbApiV4, jconf: JsoncObj) -> Result<&'static AfbApi
             sdp_port,
             tcp_port,
             tls_port,
-            tls_conf: tls_conf,
+            tls_conf,
         }));
 
     // create verbs
