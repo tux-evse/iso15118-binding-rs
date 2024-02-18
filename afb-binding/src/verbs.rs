@@ -19,7 +19,7 @@ pub struct AsyncSdpCtx {
     pub sdp: SdpServer,
     pub tcp_port: u16,
     pub tls_port: u16,
-    pub addr_v6: IfaceAddr6,
+    pub sdp_addr6: IfaceAddr6,
 }
 
 fn buffer_to_str(buffer: &[u8]) -> Result<&str, AfbError> {
@@ -33,27 +33,37 @@ fn buffer_to_str(buffer: &[u8]) -> Result<&str, AfbError> {
 AfbEvtFdRegister!(AsyncSdpCb, async_sdp_cb, AsyncSdpCtx);
 fn async_sdp_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &mut AsyncSdpCtx) -> Result<(), AfbError> {
     if revent == AfbEvtFdPoll::IN.bits() {
+        // get SDP/UDP packet
         let buffer = ctx.sdp.read_buffer()?;
-        let request= SdpRequest::new(&buffer)?;
+        let request = SdpRequest::new(&buffer)?;
         request.check_header()?;
 
-        let port = match request.get_security() {
+        let transport= request.get_transport();
+        let security= request.get_security();
+
+        let port = match &security {
             SdpSecurityModel::TLS => ctx.tls_port,
             SdpSecurityModel::NONE => ctx.tcp_port,
         };
 
-        match request.get_transport() {
-            SdpTransportProtocol::TCP => {
-                afb_log_msg!(Debug, None, "Received SDP-V2G request TCP:{}", port);
-            }
+        match &transport {
+            SdpTransportProtocol::TCP => {}
             SdpTransportProtocol::UDP => {
                 return afb_error!("sdp-request-udp", "currently not supported")
             }
         }
 
-        let response = SdpResponse::new(&ctx.addr_v6, port);
+        afb_log_msg!(
+            Debug,
+            None,
+            "Respond sdp {:?}:{:?}:[{:?}]:{}",
+            &transport,
+            &security,
+            &ctx.sdp_addr6.addr,
+            port
+        );
+        let response = SdpResponse::new(&ctx.sdp_addr6, port, transport, security);
         response.send_response(&ctx.sdp)?;
-        afb_log_msg!(Debug, None, "Respond SDP-V2G pev-ipv6: [{:?}]", &ctx.addr_v6.addr);
     }
     Ok(())
 }

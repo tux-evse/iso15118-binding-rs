@@ -31,10 +31,10 @@ impl AfbApiControls for ApiUserData {
         afb_log_msg!(Notice, api, "iface:{} sdp:{}", self.iface, self.sdp_port);
 
         // get iface ipv6-addr matching prefix (local-link?)
-        let addr_v6 = get_iface_addrs(&self.iface, self.prefix)?;
+        let sdp_addr6 = get_iface_addrs(&self.iface, self.prefix)?;
 
         // start TCP ws-server
-        let tcp = TcpServer::new("tcp-wserver", &addr_v6, self.tcp_port)?;
+        let tcp = TcpServer::new("tcp-wserver", &sdp_addr6, self.tcp_port)?;
         AfbEvtFd::new(tcp.get_uid())
             .set_fd(tcp.get_sockfd())
             .set_events(AfbEvtFdPoll::IN)
@@ -42,7 +42,7 @@ impl AfbApiControls for ApiUserData {
             .start()?;
 
         // start TLS ws-server
-        let tls = TcpServer::new("tls-wserver", &addr_v6, self.tls_port)?;
+        let tls = TcpServer::new("tls-wserver", &sdp_addr6, self.tls_port)?;
         AfbEvtFd::new(tls.get_uid())
             .set_fd(tls.get_sockfd())
             .set_events(AfbEvtFdPoll::IN)
@@ -56,7 +56,7 @@ impl AfbApiControls for ApiUserData {
             .set_events(AfbEvtFdPoll::IN)
             .set_callback(Box::new(AsyncSdpCtx {
                 sdp,
-                addr_v6,
+                sdp_addr6,
                 tcp_port: self.tcp_port,
                 tls_port: self.tls_port,
             }))

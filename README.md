@@ -48,11 +48,26 @@ sudo setcap cap_net_raw+eip /usr/local/bin/afb-binder
 ```
 ## Using Socat to send IPV6 probes
 
+check ipv6 multicast routes
+```
+export IFACE=ethX
+ip -6 route show table all type multicast table local
+sudo ip route add multicast ff00::/8 dev $IFACE table local metric 100
+ip -6 route get ff02::01
+```
+
 Sending multicast IPV6
 
 Note: will only work from an other station connected in locallink
 ```
-echo "Hi there, IPV6!" | socat STDIO UDP6-DATAGRAM:[ff02::01]:15118
+# mock SDP request TCP/TLS
+echo -e '\x01\xfe\x90\x00\x00\x00\x00\x02\x00\x00' | socat STDIO UDP6-DATAGRAM:'[ff02::01]':15118
+```
+
+Testing IPV6 multicast listeners
+```
+export IFACE=ethX
+socat -u UDP6-RECV:15118,ipv6-add-membership='[ff02::01]':$IFACE -
 ```
 
 Send TCP data
@@ -65,4 +80,7 @@ Sending TLS data
 socat -6 'OPENSSL-CONNECT:[::1]:64109,cert=_client-cert.pem,verify=0' stdio
 ```
 
-
+Debugging target eth2
+```
+ssh root@phytec-power.tuxevse.vpn "tcpdump -s0 -U -n -w - -i eth2" | wireshark -i -
+```

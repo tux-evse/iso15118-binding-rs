@@ -6,13 +6,14 @@ fn sdp_decode() {
     // sdp record data bytes sample (TCP/No-TLS)
     let data_in: SdpRequestBuffer = [0x01, 0xfe, 0x90, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00];
 
+    println!("decoding buffer= {:x?}", &data_in);
     let request = SdpRequest::new(&data_in).expect("valid sdp request");
     request.check_header().expect("valid header");
 
     println!(
         "sdp request transport:{:?} security:{:?}",
         &request.get_transport(),
-        request.get_security()
+        &request.get_security()
     )
 }
 

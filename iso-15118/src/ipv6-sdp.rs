@@ -41,7 +41,8 @@ pub enum SdpMsgType {
 }
 
 // payload buffer data type
-pub type SdpResponseBuffer = [u8; (cglue::SDP_V2G_RESPONSE_LEN + cglue::SDP_V2G_HEADER_LEN) as usize];
+pub type SdpResponseBuffer =
+    [u8; (cglue::SDP_V2G_RESPONSE_LEN + cglue::SDP_V2G_HEADER_LEN) as usize];
 pub type SdpRequestBuffer = [u8; (cglue::SDP_V2G_REQUEST_LEN + cglue::SDP_V2G_HEADER_LEN) as usize];
 
 pub struct SdpRequest {
@@ -115,11 +116,16 @@ impl SdpRequest {
 
 pub struct SdpResponse {
     payload: cglue::sdp_response,
+    sin6_scope: u32,
 }
 
 impl SdpResponse {
-    pub fn new(saddr: &IfaceAddr6, port: u16) -> Self {
-        let port = unsafe { cglue::htons(port) };
+    pub fn new(
+        saddr: &IfaceAddr6,
+        port: u16,
+        transport: SdpTransportProtocol,
+        security: SdpSecurityModel,
+    ) -> Self {
         let addr = cglue::in6_addr {
             __in6_u: cglue::in6_addr__bindgen_ty_1 {
                 __u6_addr8: saddr.get_addr().octets(),
@@ -135,7 +141,10 @@ impl SdpResponse {
                 },
                 addr,
                 port,
+                security: security as u8,
+                transport: transport as u8,
             },
+            sin6_scope: saddr.get_scope(),
         }
     }
     pub fn encode(&self) -> Result<SdpResponseBuffer, AfbError> {
@@ -156,7 +165,7 @@ impl SdpResponse {
 
     pub fn send_response(&self, sdp: &SdpServer) -> Result<(), AfbError> {
         let buffer = self.encode()?;
-        sdp.send_buffer(&buffer)?;
+        sdp.send_buffer(&buffer, self.sin6_scope)?;
 
         Ok(())
     }
@@ -198,28 +207,42 @@ impl SdpServer {
         }
     }
 
-    pub fn send_buffer(&self, buffer: &SdpResponseBuffer) -> Result<(), AfbError> {
-        let data_cell = self.get_cell()?;
-        let remote_addr6 = match &data_cell.remote_addr6 {
-            Some(value) => value,
-            None => return afb_error!("sdp-respose-state", "No destination defined"),
-        };
-
-        self.socket.sendto(buffer, remote_addr6)?;
-        Ok(())
-    }
-
     pub fn read_buffer(&self) -> Result<SdpRequestBuffer, AfbError> {
         // read sdp request directly from byte buffer
         let mut buffer = mem::MaybeUninit::<SdpRequestBuffer>::uninit();
-        let remote_addr6 = self
-            .socket
-            .recvfrom(buffer.as_mut_ptr() as *mut u8, mem::size_of::<SdpRequestBuffer>())?;
+        let remote_addr6 = self.socket.recvfrom(
+            buffer.as_mut_ptr() as *mut u8,
+            mem::size_of::<SdpRequestBuffer>(),
+        )?;
 
         // request is valid, update remote source ipv6 addr
+        afb_log_msg!(Debug, None, "Received sdp from addr6:{:0x?}", unsafe {
+            &remote_addr6.addr.sin6_addr.__in6_u.__u6_addr16
+        });
         let mut data_cell = self.get_cell()?;
         data_cell.remote_addr6 = Some(remote_addr6);
-
         Ok(unsafe { buffer.assume_init() })
+    }
+
+    pub fn send_buffer(&self, buffer: &SdpResponseBuffer, sin6_scope: u32) -> Result<(), AfbError> {
+        let data_cell = self.get_cell()?;
+        let remote_addr6 = match &data_cell.remote_addr6 {
+            Some(value) => {
+                // copy destination addr but should keep source ipv6 scope
+                let destination = value.addr;
+                SocketSourceV6 { addr: destination }
+            }
+            None => return afb_error!("sdp-respose-state", "No destination defined"),
+        };
+
+        afb_log_msg!(
+            Debug,
+            None,
+            "Responding sdp to addr6:{} scope:{}",
+            remote_addr6,
+            sin6_scope
+        );
+        self.socket.sendto(buffer, &remote_addr6)?;
+        Ok(())
     }
 }

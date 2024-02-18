@@ -24,6 +24,7 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::mem;
 use std::net;
+use std::fmt;
 
 const MAX_ERROR_LEN: usize = 256;
 pub mod cglue {
@@ -172,6 +173,19 @@ pub struct SocketSourceV6 {
     pub addr: cglue::sockaddr_in6,
 }
 
+impl fmt::Display for SocketSourceV6 {
+   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut text="ipv6:[".to_string();
+        for idx in 0 .. 8 {
+            let slot= unsafe {self.addr.sin6_addr.__in6_u.__u6_addr16[idx]};
+            let key= format!("{:#02x}:", unsafe{cglue::ntohs(slot)});
+            text.push_str(&key.as_str());
+        }
+        text.push_str("]");
+        write!(f, "{}",text)
+   }
+}
+
 pub struct SocketSdpV6 {
     sockfd: i32,
 }
@@ -244,7 +258,7 @@ impl SocketSdpV6 {
         if rc < 0 {
             return afb_error!(
                 "ipv6-socket-attach",
-                "fail device mapping iface:{} err:{}",
+                "fail device binding iface:{} err:{}",
                 iface_name,
                 get_perror()
             );
@@ -309,16 +323,17 @@ impl SocketSdpV6 {
             unsafe { cglue::close(self.sockfd) };
             return afb_error!(
                 "ipv6-socket-setopt",
-                "fail to set reuseport option {}",
+                "fail to set ipv6_joint_group option {}",
                 get_perror()
             );
         }
+
         Ok(())
     }
 
     pub fn recvfrom(&self, buffer: *mut u8, len: usize) -> Result<SocketSourceV6, AfbError> {
         let mut remote_addr6 = unsafe { mem::zeroed::<cglue::sockaddr_in6>() };
-        let mut remote_len = cglue::C_INET6_ADDR_LEN;
+        let mut remote_len = mem::size_of::<cglue::sockaddr_in6>();
 
         let count = unsafe {
             cglue::recvfrom(
