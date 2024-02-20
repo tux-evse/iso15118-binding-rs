@@ -89,12 +89,20 @@ pub fn binding_init(rootv4: AfbApiV4, jconf: JsoncObj) -> Result<&'static AfbApi
     let tls_port = jconf.default::<u32>("tls_port", 64109)? as u16;
     let cert_file = jconf.get::<&str>("tls_cert")?;
     let priv_key = jconf.get::<&str>("tls_key")?;
-    let pin_key = jconf.default::<&str>("tls_pin", "")?;
-    let ca_oem = jconf.default::<&str>("tls_oem", "")?;
-    let hostname = jconf.default::<&'static str>("hostname", "")?;
+    let pin_key = jconf.optional::<&str>("tls_pin")?;
+    let ca_oem = jconf.optional::<&str>("tls_oem")?;
+    let hostname = jconf.optional::<&'static str>("hostname")?;
+    let tls_psk = jconf.optional::<&'static str>("tls_pks")?;
 
     // parse and load TLS certificates at binding init
-    let tls_conf = TlsConfig::new(cert_file, priv_key, pin_key, ca_oem, hostname)?;
+    let tls_conf = TlsConfig::new(
+        cert_file,
+        priv_key,
+        pin_key,
+        ca_oem,
+        hostname,
+        tls_psk,
+    )?;
 
     // register data converter
     iso15118_registers()?;

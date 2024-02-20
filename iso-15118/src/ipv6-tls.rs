@@ -60,7 +60,6 @@ impl TlsConnection {
         Ok(count)
     }
 
-
     pub fn check_pending(&self) -> bool {
         self.session.check_pending()
     }
@@ -77,11 +76,24 @@ pub struct TlsConfig {
 
 // Parse certificate keys
 impl TlsConfig {
-    pub fn new(cert_file: &str, key_file: &str, key_pin: &str, ca_oem: &str, hostname: &'static str) -> Result<&'static Self, AfbError> {
-        let config = GnuTlsConfig::new(cert_file, key_file, key_pin, ca_oem, hostname)?;
+    pub fn new(
+        cert_file: &str,
+        key_file: &str,
+        key_pin:Option<&str>,
+        ca_oem: Option<&str>,
+        hostname: Option<&'static str>,
+        tls_psk: Option<&'static str>,
+    ) -> Result<&'static Self, AfbError> {
+        let config = GnuTlsConfig::new(
+            cert_file,
+            key_file,
+            key_pin,
+            ca_oem,
+            hostname,
+            tls_psk,
+        )?;
 
         let handle = Box::new(TlsConfig { gtls: config });
         Ok(Box::leak(handle))
     }
 }
-

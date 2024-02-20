@@ -498,6 +498,17 @@ pub extern "C" fn client_certificate_cb(session: cglue::gnutls_session_t) -> raw
     0
 }
 
+
+#[no_mangle]
+pub extern "C" fn pre_share_key_cb (session: cglue::gnutls_session_t, username: *const raw::c_char, key: *const cglue::gnutls_datum_t) -> raw::c_int {
+
+    let share_key= mem::zero::<cglue::gnutls_datum_t>();
+    key.size= secre_len,
+    ket.data= malloc(keysize)
+    0
+}
+
+
 pub struct GnuTlsSession {
     hostname: Option<CString>,
     xsession: cglue::gnutls_session_t,
@@ -513,12 +524,8 @@ impl Drop for GnuTlsSession {
 }
 
 impl GnuTlsSession {
-    pub fn new(
-        config: &GnuTlsConfig,
-        sockfd: i32,
-    ) -> Result<&'static Self, AfbError> {
-
-        let xcred= config.get_xcred();
+    pub fn new(config: &GnuTlsConfig, sockfd: i32) -> Result<&'static Self, AfbError> {
+        let xcred = config.get_xcred();
         let xsession = unsafe {
             let mut session = mem::MaybeUninit::<cglue::gnutls_session_t>::uninit();
             let status = cglue::gnutls_init(
@@ -596,25 +603,39 @@ impl GnuTlsSession {
         };
 
         // when defined store hostname as a C string
-        let hostname = if config.hostname == "" {
-            None
-        } else {
-            match CString::new(config.hostname) {
-                Ok(value) => Some(value),
+        let hostname = match config.hostname {
+            Some(value) => match CString::new(value) {
+                Ok(name) => Some(name),
                 Err(_) => {
                     return afb_error!(
                         "gtls-session-hostname",
                         "fail hostname to UTF8 hostname:{}",
-                        config.hostname
+                        value
                     )
                 }
-            }
+            },
+            None => None,
+        };
+
+        let tls_psk = match config.tls_psk {
+            Some(value) => match CString::new(value) {
+                Ok(name) => Some(name),
+                Err(_) => {
+                    return afb_error!(
+                        "gtls-session-hostname",
+                        "fail hostname to UTF8 hostname:{}",
+                        value
+                    )
+                }
+            },
+            None => None,
         };
 
         let this = Box::leak(Box::new(GnuTlsSession {
             xsession,
             xcred,
             hostname,
+            tls_psk,
         }));
         Ok(this)
     }
@@ -711,7 +732,8 @@ impl GnuTlsSession {
 
 pub struct GnuTlsConfig {
     version: String,
-    hostname: &'static str,
+    hostname: Option<&'static str>,
+    tls_psk: Option<&'static str>,
     priority: CString,
     xcred: cglue::gnutls_certificate_credentials_t,
 }
@@ -719,11 +741,14 @@ impl GnuTlsConfig {
     pub fn new(
         cert_path: &str,
         key_path: &str,
-        key_pin: &str,
-        ca_path: &str,
-        hostname: &'static str,
+        key_pin: Option<&str>,
+        ca_path: Option<&str>,
+        hostname: Option<&'static str>,
+        tls_psk: Option<&'static str>,
     ) -> Result<Self, AfbError> {
         const GNUTLS_PRIORITY: &str = "NORMAL:-VERS-TLS-ALL:+VERS-TLS1.2";
+        const _GLNU_TLS3_PRIO: &str =
+            "SECURE128:-VERS-SSL3.0:-VERS-TLS1.0:-ARCFOUR-128:+PSK:+DHE-PSK";
         const GNU_TLS_MIN_VER: &str = "3.4.6";
 
         let glutls_version = match CString::new(GNU_TLS_MIN_VER) {
@@ -748,36 +773,29 @@ impl GnuTlsConfig {
             }
         };
 
-        let glutls_key = match CString::new(key_path) {
-            Ok(value) => value,
-            Err(_) => return afb_error!("gtls-server-key", "fail to import key:{}", key_path),
-        };
-
         let glutls_cert = match CString::new(cert_path) {
             Ok(value) => value,
-            Err(_) => return afb_error!("gtls-server-cert", "fail to import cert:{}", cert_path),
-        };
-
-        let glutls_pin = if key_pin == "" {
-            None
-        } else {
-            match CString::new(key_pin) {
-                Ok(value) => Some(value),
-                Err(_) => {
-                    return afb_error!("gtls-server-key", "fail to import pin:{}", key_pin);
-                }
+            Err(_) => {
+                return afb_error!("gtls-server-cert", "fail to import tls_cert:{}", cert_path)
             }
         };
 
-        let glutls_ca = if ca_path == "" {
-            None
-        } else {
-            match CString::new(ca_path) {
+        let glutls_pin = match key_pin {
+            None => None,
+            Some(pin) => match CString::new(pin) {
+                Ok(value) => Some(value),
+                Err(_) => return afb_error!("gtls-server-key", "fail to import tls_pin:{}", pin),
+            },
+        };
+
+        let glutls_ca = match ca_path {
+            None => None,
+            Some(path) => match CString::new(path) {
                 Ok(value) => Some(value),
                 Err(_) => {
-                    return afb_error!("gtls-server-ca", "fail to import pin:{}", key_pin);
+                    return afb_error!("gtls-server-ca", "fail to import ca_path:{}", path);
                 }
-            }
+            },
         };
 
 
@@ -815,6 +833,15 @@ impl GnuTlsConfig {
             }
         };
 
+        // If pre_share-key defined we should use v1.3
+        let glutls_key = match CString::new(key_path) {
+            Ok(value) => {
+                unsafe {cglue::gnutls_psk_set_server_credentials_function(xcred, psk_creds);
+                value
+            },
+            Err(_) => return afb_error!("gtls-server-key", "fail to import tls_key:{}", key_path),
+        };
+
         if status < 0 {
             return afb_error!(
                 "gtls-config-cert",
@@ -845,12 +872,16 @@ impl GnuTlsConfig {
             );
         }
 
-        // prepare priority C string for session::new
-        let priority = CString::new(GNUTLS_PRIORITY).unwrap();
+        // If tls_psk then use TLS-1.3 otherwise use TLS-1.2
+        let priority = match tls_psk {
+            None => CString::new(GNUTLS_PRIORITY).unwrap(),
+            Some(_) => CString::new(_GLNU_TLS3_PRIO).unwrap(),
+        };
 
         let config = GnuTlsConfig {
             version,
             hostname,
+            tls_psk,
             xcred,
             priority,
         };

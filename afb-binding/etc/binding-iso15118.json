@@ -14,7 +14,9 @@
             "tls_oem":  "${PKI_TLS_DIR}/_trialog-oem-ca1.pem",
             "tls_cert": "${PKI_TLS_DIR}/_trialog-secc-cert.pem",
             "tls_key": "${PKI_TLS_DIR}/_trialog-secc-cert.key",
-            "tls_pin":"123456"
+            "tls_pin":"123456",
+            // for wireshark debug generated with https://www.wireshark.org/tools/wpa-psk.html
+            "tls_pks": "dc9c73f4a7da860beec8803df05c491110647e0a96e418554f2438d0cb982867"
         }
     ]
 }
