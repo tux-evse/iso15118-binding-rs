@@ -39,7 +39,7 @@
                 "--trap-faults=0",
                 "--config=afb-binding/etc/binder-iso15118.json",
                 "--config=afb-binding/etc/binding-iso15118.json",
-                "--config=afb-test/etc/binding-isoslac-natif.json" ,
+                "--config=afb-test/etc/binding-isoslac-test.json" ,
                 "--config=afb-test/etc/binding-isotap-test.json",
             ],
             "cwd": "${workspaceFolder}",

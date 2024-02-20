@@ -91,11 +91,11 @@ fn async_tcp_client_cb(
         let count = ctx.client.get(&mut buffer)?;
 
         let data = buffer_to_str(&buffer[0..count])?;
-        println!("--tcp-client-read--buffer:{}  count:{} ", data, count,);
+        println!("**** tcp-client-read count:{} buffer:{}", count, data);
         let response = data.to_uppercase();
         let _count = ctx.client.send(&mut response.as_bytes())?;
     } else {
-        println!("--- Socket closed ---");
+        println!("**** Tcp client Socket closed");
         let boxe = unsafe { Box::from_raw(ctx) };
         drop(boxe);
     }
@@ -108,7 +108,7 @@ struct AsyncTlsClientCtx {
 
 impl Drop for AsyncTlsClientCtx {
     fn drop(&mut self) {
-        println!("**** Tls session drop");
+        println!("**** TlsSession drop");
     }
 }
 
@@ -125,12 +125,12 @@ fn async_tls_client_cb(
         let count = ctx.connection.recv(&mut buffer)?;
         if count > 0 {
             let data = buffer_to_str(&buffer[0..count])?;
-            println!("--tls-client-read--buffer:{}  count:{} ", data, count,);
+            println!("**** tls-client-read count:{} buffer:{}", count, data);
             let response = data.to_uppercase();
             let _count = ctx.connection.send(&mut response.as_bytes())?;
         }
     } else {
-        println!("--- Socket closed ---");
+        println!("**** Tls client Socket closed");
         let boxe = unsafe { Box::from_raw(ctx) };
         drop(boxe);
     }
@@ -187,7 +187,7 @@ fn scanifv6_callback(request: &AfbRequest, args: &AfbData) -> Result<(), AfbErro
     let addr = get_iface_addrs(&iface, 0xfe80)?;
 
     println!(
-        "iface:{} addr:{} index:{}",
+        "iface:{} addr6:{} scope6:{}",
         iface,
         addr.get_addr().to_string(),
         addr.get_scope()

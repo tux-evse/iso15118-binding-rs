@@ -81,6 +81,16 @@ impl AfbApiControls for TapUserData {
     }
 }
 
+struct DummyMockCtx {
+    label: &'static str,
+}
+AfbVerbRegister!(DummyMockVerb, dummy_request_cb, DummyMockCtx);
+fn dummy_request_cb(rqt: &AfbRequest, _args: &AfbData, ctx: &mut DummyMockCtx) -> Result<(), AfbError> {
+    afb_log_msg!(Notice, rqt, "Api mocking:{}", ctx.label);
+    rqt.reply(AFB_NO_DATA, 0);
+    Ok(())
+}
+
 // rootv4 init callback started at rootv4 load time before any API exist
 // -----------------------------------------
 pub fn binding_test_init(rootv4: AfbApiV4, jconf: JsoncObj) -> Result<&'static AfbApi, AfbError> {
@@ -97,11 +107,17 @@ pub fn binding_test_init(rootv4: AfbApiV4, jconf: JsoncObj) -> Result<&'static A
         iface,
     };
 
+    let subscribe_verb = AfbVerb::new("subscribe")
+        .set_info("Mock subscribe api")
+        .set_callback(Box::new(DummyMockVerb {label: "subscribe"}))
+        .finalize()?;
+
     afb_log_msg!(Notice, rootv4, "iso15118 test uid:{} target:{}", uid, target);
     let api = AfbApi::new(uid)
         .set_name(api)
         .set_info("Testing iso15118 tap reporting")
         .require_api(target)
+        .add_verb(subscribe_verb)
         .set_callback(Box::new(tap_config))
         .seal(false)
         .finalize()?;

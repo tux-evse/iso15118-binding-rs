@@ -33,7 +33,7 @@ impl TlsConnection {
     pub fn new(config: &TlsConfig, client: TcpClient) -> Result<Self, AfbError> {
         // create a new tls session for server TlsConfig
         let sockfd = client.get_sockfd()?;
-        let session = GnuTlsSession::new(&config.gtls, sockfd, 0, 0)?;
+        let session = GnuTlsSession::new(&config.gtls, sockfd)?;
         // &session.set_hostname(config);
 
         let connection = TlsConnection { session, client };
@@ -77,8 +77,8 @@ pub struct TlsConfig {
 
 // Parse certificate keys
 impl TlsConfig {
-    pub fn new(cert_file: &str, key_file: &str, key_pin: &str, hostname: &'static str) -> Result<&'static Self, AfbError> {
-        let config = GnuTlsConfig::new(cert_file, key_file, key_pin, hostname)?;
+    pub fn new(cert_file: &str, key_file: &str, key_pin: &str, ca_oem: &str, hostname: &'static str) -> Result<&'static Self, AfbError> {
+        let config = GnuTlsConfig::new(cert_file, key_file, key_pin, ca_oem, hostname)?;
 
         let handle = Box::new(TlsConfig { gtls: config });
         Ok(Box::leak(handle))

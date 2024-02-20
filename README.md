@@ -28,7 +28,7 @@ desktop => sudo ./afb-test/etc/client-eth2-tap.sh
 IPV6 local-link. For ISO15118 remote debug to work you need a valid ipv6 addr
 on you desktop veth-dbg that should be ping able from your bord.
 ```
-desktop =>  ip -6 addr show dev veth-dbg | grep inet6
+desktop =>  echo "VETH_IPV6=$(ip -6 addr show dev veth-dbg | grep inet6 | awk '{print $2}' | awk -F '/' '{print $1}')"
 target  =>  ping -I br0-tun fe80::xxxxxxxx
 ```
 
@@ -77,7 +77,10 @@ socat -6 'TCP-CONNECT:[::1]:61341' stdio
 
 Sending TLS data
 ```
-socat -6 'OPENSSL-CONNECT:[::1]:64109,cert=_client-cert.pem,verify=0' stdio
+# Fulup TBD check with Stephane to fix bash
+export VETH_IPV6=`ip -6 addr show dev veth-dbg | grep inet6 | awk '{print $2}' | awk -F '/' '{print $1}'`; echo "VETH_IPV6=$VETH_IPV6"
+socat -6 "OPENSSL-CONNECT:[${VETH_IPV6}%veth-dbg]:64109,cert=afb-test/etc/_client-cert.pem,verify=0" stdio
+socat -6 OPENSSL-CONNECT:[${VETH_IPV6}%veth-dbg]:64109,cert=afb-test/etc/_client-cert.pem,cert=afb-test/etc/_trialog-oem-cert.pem stdio
 ```
 
 Debugging target eth2

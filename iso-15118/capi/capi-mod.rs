@@ -112,12 +112,6 @@ pub fn get_iface_addrs(iface: &str, filter: u16) -> Result<IfaceAddr6, AfbError>
             }
         };
 
-        println!(
-            "name:{} index:{}",
-            unsafe { CStr::from_ptr(ifa.ifa_name).to_str().unwrap() },
-            idx
-        );
-
         // iface name match ?
         if iface_name.as_ref() != unsafe { CStr::from_ptr(ifa.ifa_name).as_ref() } {
             next = ifa.ifa_next;
@@ -522,39 +516,9 @@ impl GnuTlsSession {
     pub fn new(
         config: &GnuTlsConfig,
         sockfd: i32,
-        key_idx: u32,
-        cert_idx: u32,
     ) -> Result<&'static Self, AfbError> {
-        let private_key = config.get_key(key_idx)?;
-        let (cert_list, cert_count) = config.get_cert(cert_idx)?;
 
-        let xcred = unsafe {
-            let mut cred = mem::MaybeUninit::<cglue::gnutls_certificate_credentials_t>::uninit();
-            let status = cglue::gnutls_certificate_allocate_credentials(cred.as_mut_ptr());
-            let cred = cred.assume_init();
-            if status < 0 {
-                return afb_error!(
-                    "gtls-session-allocate",
-                    "file to initialise session error:{}",
-                    gtls_perror(status)
-                );
-            }
-            cred
-        };
-
-        let status = unsafe {
-            cglue::gnutls_certificate_set_x509_key(xcred, cert_list, cert_count as i32, private_key)
-        };
-        if status < 0 {
-            return afb_error!(
-                "gtls-session-certificate",
-                "invalid glutls key/certification cert_idx:{} cert_key:{} error:{}",
-                cert_idx,
-                key_idx,
-                gtls_perror(status)
-            );
-        }
-
+        let xcred= config.get_xcred();
         let xsession = unsafe {
             let mut session = mem::MaybeUninit::<cglue::gnutls_session_t>::uninit();
             let status = cglue::gnutls_init(
@@ -658,30 +622,6 @@ impl GnuTlsSession {
     pub fn close(&self) {
         unsafe { cglue::gnutls_deinit(self.xsession) };
     }
-    // client may have to known server certificate to authenticate server
-    #[allow(dead_code)]
-    pub fn set_cacert(&mut self, ca_path: &str) -> Result<&mut Self, AfbError> {
-        let gnutls_ca = match CString::new(ca_path) {
-            Ok(path) => path,
-            Err(_) => return afb_error!("gtls-client-ca", "fail to import server ca:{}", ca_path),
-        };
-        let status = unsafe {
-            cglue::gnutls_certificate_set_x509_trust_file(
-                self.xcred,
-                gnutls_ca.as_ptr(),
-                cglue::C_GNUTLS_X509_FMT_PEM,
-            )
-        };
-        if status < 0 {
-            return afb_error!(
-                "gtls-session-cacert",
-                "fail to import server ca certificate:{} error:{}",
-                ca_path,
-                gtls_perror(status)
-            );
-        }
-        Ok(self)
-    }
 
     pub fn check_pending(&self) -> bool {
         let status = unsafe { cglue::gnutls_record_check_pending(self.xsession) };
@@ -780,6 +720,7 @@ impl GnuTlsConfig {
         cert_path: &str,
         key_path: &str,
         key_pin: &str,
+        ca_path: &str,
         hostname: &'static str,
     ) -> Result<Self, AfbError> {
         const GNUTLS_PRIORITY: &str = "NORMAL:-VERS-TLS-ALL:+VERS-TLS1.2";
@@ -809,12 +750,12 @@ impl GnuTlsConfig {
 
         let glutls_key = match CString::new(key_path) {
             Ok(value) => value,
-            Err(_) => return afb_error!("gtls-client-key", "fail to import key:{}", key_path),
+            Err(_) => return afb_error!("gtls-server-key", "fail to import key:{}", key_path),
         };
 
         let glutls_cert = match CString::new(cert_path) {
             Ok(value) => value,
-            Err(_) => return afb_error!("gtls-client-cert", "fail to import cert:{}", cert_path),
+            Err(_) => return afb_error!("gtls-server-cert", "fail to import cert:{}", cert_path),
         };
 
         let glutls_pin = if key_pin == "" {
@@ -823,10 +764,22 @@ impl GnuTlsConfig {
             match CString::new(key_pin) {
                 Ok(value) => Some(value),
                 Err(_) => {
-                    return afb_error!("gtls-client-key", "fail to import pin:{}", key_pin);
+                    return afb_error!("gtls-server-key", "fail to import pin:{}", key_pin);
                 }
             }
         };
+
+        let glutls_ca = if ca_path == "" {
+            None
+        } else {
+            match CString::new(ca_path) {
+                Ok(value) => Some(value),
+                Err(_) => {
+                    return afb_error!("gtls-server-ca", "fail to import pin:{}", key_pin);
+                }
+            }
+        };
+
 
         let xcred = unsafe {
             let mut cred = mem::MaybeUninit::<cglue::gnutls_certificate_credentials_t>::uninit();
@@ -872,6 +825,26 @@ impl GnuTlsConfig {
             );
         }
 
+        let status = unsafe {
+            match glutls_ca {
+                None => 0,
+                Some(ca) => cglue::gnutls_certificate_set_x509_trust_file(
+                    xcred,
+                    ca.as_ptr(),
+                    cglue::C_GNUTLS_X509_FMT_PEM,
+                ),
+            }
+        };
+
+        if status < 0 {
+            return afb_error!(
+                "gtls-config-ca",
+                "invalid glutls key/certification ca_path:{} error:{}",
+                cert_path,
+                gtls_perror(status)
+            );
+        }
+
         // prepare priority C string for session::new
         let priority = CString::new(GNUTLS_PRIORITY).unwrap();
 
@@ -882,6 +855,10 @@ impl GnuTlsConfig {
             priority,
         };
         Ok(config)
+    }
+
+    pub fn get_xcred(&self) -> cglue::gnutls_certificate_credentials_t {
+        self.xcred
     }
 
     pub fn get_key(&self, index: u32) -> Result<cglue::gnutls_x509_privkey_t, AfbError> {

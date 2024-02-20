@@ -32,6 +32,6 @@ echo iso15118 debug mode iface=$IFACE config=$CONFDIR/*.json port=$DEVTOOL_PORT
 afb-binder --name=afb-iso15118 --port=$DEVTOOL_PORT -v \
   --config=$ROOTDIR/../afb-binding/etc/binder-iso15118.json \
   --config=$ROOTDIR/../afb-binding/etc/binding-iso15118.json \
-  --config=$ROOTDIR/../afb-test/etc/binding-isoslac-natif.json \
+  --config=$ROOTDIR/../afb-test/etc/binding-isoslac-test.json \
   --config=$ROOTDIR/../afb-test/etc/binding-isotap-test.json \
   $*
