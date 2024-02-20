@@ -10,7 +10,6 @@ use std::env;
 
 fn main() {
     // invalidate the built crate whenever the wrapper changes
-    println!("cargo:rerun-if-changed=capi/capi-map.h");
     println!("cargo:rustc-link-search=/usr/local/lib64");
     println!("cargo:rustc-link-arg=-liso15118");
 
@@ -26,11 +25,12 @@ fn main() {
     //   Do not exit this file it will be regenerated automatically by cargo.
     //   Check:
     //     - build.rs for C/Rust glue options
-    //     - src/capi/capi-map.h for C prototype inputs
+    //     - src/capi/capi-network.h for C prototype inputs
     // -----------------------------------------------------------------------
     ";
+    println!("cargo:rerun-if-changed=capi/capi-network.h");
     let libcapi = bindgen::Builder::default()
-        .header("capi/capi-map.h") // Pionix C++ prototype wrapper input
+        .header("capi/capi-network.h") // Chargebyte C prototype wrapper input
         .raw_line(header)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .derive_debug(false)
@@ -43,6 +43,7 @@ fn main() {
         .allowlist_type("ipv6_mreq")
         .allowlist_type("ifreq")
         .allowlist_function("bind")
+        .allowlist_function("malloc")
         .allowlist_function("socket")
         .allowlist_function("setsockopt")
         .allowlist_function("close")
@@ -58,9 +59,39 @@ fn main() {
         .allowlist_type("gnutls_.*")
         .allowlist_var("SDP_.*")
         .generate()
-        .expect("Unable to generate libcapi");
+        .expect("Unable to generate _capi-network");
 
     libcapi
-        .write_to_file("capi/_capi-map.rs")
+        .write_to_file("capi/_capi-network.rs")
+        .expect("Couldn't write libcapi!");
+
+
+    let header = "
+    // -----------------------------------------------------------------------
+    //         <- private 'lib-iso15118' Rust/C unsafe binding ->
+    // -----------------------------------------------------------------------
+    //   Do not exit this file it will be regenerated automatically by cargo.
+    //   Check:
+    //     - build.rs for C/Rust glue options
+    //     - src/capi/capi-encoders.h for C prototype inputs
+    // -----------------------------------------------------------------------
+    ";
+    println!("cargo:rerun-if-changed=capi/capi-encoders.h");
+    let libcapi = bindgen::Builder::default()
+        .header("capi/capi-encoders.h") // Chargebyte C prototype wrapper input
+        .raw_line(header)
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .derive_debug(false)
+        .layout_tests(false)
+        .allowlist_function("iso2_.*")
+        .allowlist_type("iso2_.*")
+        .allowlist_var("iso2_.*")
+        .allowlist_function("din_.*")
+        .allowlist_function("iso20_.*")
+        .generate()
+        .expect("Unable to generate _capi-encoders");
+
+    libcapi
+        .write_to_file("capi/_capi-encoders.rs")
         .expect("Couldn't write libcapi!");
 }

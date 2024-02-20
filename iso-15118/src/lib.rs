@@ -31,8 +31,11 @@ mod test;
 #[cfg(not(afbv4))]
 extern crate afbv4;
 
-#[path = "../capi/capi-mod.rs"]
-mod capi;
+#[path = "../capi/capi-network.rs"]
+mod network;
+
+#[path = "../capi/capi-encoders.rs"]
+mod encoders;
 
 #[path = "ipv6-sdp.rs"]
 mod sdp;
@@ -45,8 +48,9 @@ mod tls;
 
 
 pub mod prelude {
-    pub(crate) use crate::capi::*;
-    pub use crate::capi::{get_iface_addrs, IfaceAddr6};
+    pub(crate) use crate::network::*;
+    pub(crate) use crate::encoders::*;
+    pub use crate::network::{get_iface_addrs, IfaceAddr6};
     pub use crate::sdp::*;
     pub use crate::tls::*;
     pub use crate::tcp::*;
