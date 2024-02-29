@@ -1,3 +1,4 @@
+use std::io::Write;
 /*
  * Copyright (C) 2015-2022 IoT.bzh Company
  * Author: Fulup Ar Foll <fulup@iot.bzh>
@@ -16,6 +17,7 @@
  *
  * ref: https://gnutls.org/manual/html_node/Echo-server-with-X_002e509-authentication.html
  *      https://www.gnutls.org/reference/gnutls-gnutls.html
+ *      https://github.com/defuse/gnutls-psk/blob/master/server.c
  *
  * Nota: did not implement revocation list CRLs
  */
@@ -23,9 +25,13 @@ use ::std::os::raw;
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::fmt;
+use std::fs::File;
 use std::mem;
 use std::net;
 use std::ptr;
+use std::rc::Rc;
+use std::slice;
+use std::sync::Mutex;
 
 const MAX_ERROR_LEN: usize = 256;
 pub mod cglue {
@@ -489,13 +495,13 @@ pub extern "C" fn client_certificate_cb(session: cglue::gnutls_session_t) -> raw
         return cglue::C_GNUTLS_E_CERTIFICATE_ERROR;
     }
 
-    if let Some(hostname) = &tls_session.hostname {
-        if unsafe { cglue::gnutls_x509_crt_check_hostname(cert, hostname.as_ptr()) } != 0 {
+    if let Some(client_sni) = &tls_session.client_sni {
+        if unsafe { cglue::gnutls_x509_crt_check_hostname(cert, client_sni.as_ptr()) } != 0 {
             afb_log_msg!(
                 Error,
                 None,
-                "gtls-client-certificate: certificate CN does not match hostname:{:?}",
-                tls_session.hostname
+                "gtls-client-certificate: certificate CN does not match client_sni:{:?}",
+                tls_session.client_sni
             );
             return cglue::C_GNUTLS_E_CERTIFICATE_ERROR;
         }
@@ -559,12 +565,168 @@ pub extern "C" fn pre_share_key_cb(
     0
 }
 
+#[no_mangle]
+pub extern "C" fn gnutls_keylog_cb(
+    session: cglue::gnutls_session_t,
+    label: *const raw::c_char,
+    secret: *const cglue::gnutls_datum_t,
+) -> i32 {
+    // reference: https://www.ietf.org/archive/id/draft-thomson-tls-keylogfile-00.html
+
+    let tls_session = match unsafe {
+        (cglue::gnutls_session_get_ptr(session) as *const GnuTlsSession).as_ref()
+    } {
+        Some(data) => data,
+        None => {
+            afb_log_msg!(
+                Critical,
+                None,
+                "gtls-log-callback: no session provided to callback"
+            );
+            return -1;
+        }
+    };
+
+    let secret = match unsafe { secret.as_ref() } {
+        None => return -1,
+        Some(value) => value,
+    };
+
+    let cstring = unsafe { CStr::from_ptr(label as *const raw::c_char) };
+    let secret_label = cstring.to_str().unwrap().to_string();
+
+    let mut client_data = mem::MaybeUninit::<cglue::gnutls_datum_t>::uninit();
+    let mut server_data = mem::MaybeUninit::<cglue::gnutls_datum_t>::uninit();
+    let (client_data, _server_data) = unsafe {
+        cglue::gnutls_session_get_random(
+            session,
+            client_data.as_mut_ptr(),
+            server_data.as_mut_ptr(),
+        );
+        (client_data.assume_init(), server_data.assume_init())
+    };
+    let mut client_random="".to_string();
+    let slice = unsafe { slice::from_raw_parts(client_data.data, client_data.size as usize) };
+    for byte in slice {
+        client_random = client_random + format!("{:02x}", byte).as_str();
+    }
+
+    let mut session_secret = "".to_string();
+    let slice = unsafe { slice::from_raw_parts(secret.data, secret.size as usize) };
+    for byte in slice {
+        session_secret = session_secret + format!("{:02x}", byte).as_str();
+    }
+
+    let _ = tls_session
+        .logger
+        .write(format!("{} {} {}\n", secret_label, client_random, session_secret).as_str());
+    0
+}
+pub struct TlsKeyLogger {
+    fd: Option<Mutex<File>>,
+}
+
+impl TlsKeyLogger {
+    pub fn new(log_path: Option<&str>) -> Result<Self, AfbError> {
+        let fd = match log_path {
+            None => None,
+            Some(path) => {
+                let file = match File::create(path) {
+                    Ok(handle) => handle,
+                    Err(error) => {
+                        return afb_error!(
+                            "gtls-config-log",
+                            "fail to create log file:{} error:{}",
+                            path,
+                            error
+                        )
+                    }
+                };
+                Some(Mutex::new(file))
+            }
+        };
+
+        let handle = TlsKeyLogger { fd };
+        Ok(handle)
+    }
+
+    pub fn write(&self, text: &str) -> Result<(), AfbError> {
+        match &self.fd {
+            None => {}
+            Some(handle) => {
+                let mut fd = handle.lock().unwrap();
+                match fd.write_all(text.as_bytes()) {
+                    Ok(_) => {}
+                    Err(error) => {
+                        return afb_error!(
+                            "gtls-config-log",
+                            "fail to push log entry error:{}",
+                            error
+                        )
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn activate_log(&self, session: cglue::gnutls_session_t) {
+        match &self.fd {
+            None => {}
+            Some(_handle) => {
+                unsafe {
+                    cglue::gnutls_session_set_keylog_function(session, Some(gnutls_keylog_cb))
+                };
+            }
+        }
+    }
+}
+
 pub struct GnuTlsSession {
     xcred: cglue::gnutls_certificate_credentials_t,
     xsession: cglue::gnutls_session_t,
     psk_key: Option<CString>,
     psk_len: usize,
-    hostname: Option<CString>,
+    client_sni: Option<CString>,
+    logger: Rc<TlsKeyLogger>,
+}
+
+#[repr(u32)]
+pub enum GnuTlsVersion {
+    TLS1_2 = cglue::gnutls_protocol_t_GNUTLS_TLS1_2,
+    TLS1_3 = cglue::gnutls_protocol_t_GNUTLS_TLS1_3,
+    DTLS1_2 = cglue::gnutls_protocol_t_GNUTLS_DTLS1_2,
+    UNSUPPORTED = cglue::gnutls_protocol_t_GNUTLS_VERSION_UNKNOWN,
+}
+
+impl GnuTlsVersion {
+    pub fn from_u32(value: u32) -> Self {
+        match value as cglue::gnutls_protocol_t {
+            cglue::gnutls_protocol_t_GNUTLS_TLS1_2 => GnuTlsVersion::TLS1_2,
+            cglue::gnutls_protocol_t_GNUTLS_TLS1_3 => GnuTlsVersion::TLS1_3,
+            cglue::gnutls_protocol_t_GNUTLS_DTLS1_2 => GnuTlsVersion::DTLS1_2,
+            _ => GnuTlsVersion::UNSUPPORTED,
+        }
+    }
+
+    pub fn to_u32(&self) -> cglue::gnutls_protocol_t {
+        match self {
+            GnuTlsVersion::TLS1_2 => cglue::gnutls_protocol_t_GNUTLS_TLS1_2,
+            GnuTlsVersion::TLS1_3 => cglue::gnutls_protocol_t_GNUTLS_TLS1_3,
+            GnuTlsVersion::DTLS1_2 => cglue::gnutls_protocol_t_GNUTLS_DTLS1_2,
+            GnuTlsVersion::UNSUPPORTED => cglue::gnutls_protocol_t_GNUTLS_VERSION_UNKNOWN,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        let value = self.to_u32();
+        let cstring = unsafe {
+            let buffer = cglue::gnutls_protocol_get_name(value);
+            CStr::from_ptr(buffer)
+        };
+        let slice: &str = cstring.to_str().unwrap();
+        slice.to_owned()
+    }
 }
 
 impl Drop for GnuTlsSession {
@@ -626,7 +788,7 @@ impl GnuTlsSession {
         let status = unsafe {
             cglue::gnutls_credentials_set(
                 xsession,
-                cglue::gnutls_credentials_type_t_GNUTLS_CRD_CERTIFICATE,
+                config.authent,
                 xcred as *const _ as *mut raw::c_void,
             )
         };
@@ -654,14 +816,14 @@ impl GnuTlsSession {
             cglue::gnutls_transport_set_ptr(xsession, sockfd as cglue::gnutls_transport_ptr_t)
         };
 
-        // when defined store hostname as a C string
-        let hostname = match config.hostname {
+        // when defined store client_sni as a C string
+        let client_sni = match config.client_sni {
             Some(value) => match CString::new(value) {
                 Ok(name) => Some(name),
                 Err(_) => {
                     return afb_error!(
-                        "gtls-session-hostname",
-                        "fail hostname to UTF8 hostname:{}",
+                        "gtls-session-client_sni",
+                        "fail client_sni to UTF8 client_sni:{}",
                         value
                     )
                 }
@@ -674,8 +836,8 @@ impl GnuTlsSession {
                 Ok(name) => (Some(name), value.len()),
                 Err(_) => {
                     return afb_error!(
-                        "gtls-session-hostname",
-                        "fail hostname to UTF8 hostname:{}",
+                        "gtls-session-client_sni",
+                        "fail client_sni to UTF8 client_sni:{}",
                         value
                     )
                 }
@@ -683,16 +845,53 @@ impl GnuTlsSession {
             None => (None, 0),
         };
 
+        config.logger.activate_log(xsession);
+
         let this = Box::leak(Box::new(GnuTlsSession {
             xcred,
             xsession,
-            hostname,
+            client_sni,
             psk_key,
             psk_len,
+            logger: config.logger.clone(),
         }));
 
         unsafe { cglue::gnutls_session_set_ptr(xsession, this as *const _ as *mut raw::c_void) };
         Ok(this)
+    }
+
+    #[allow(dead_code)]
+    pub fn get_host_sni(&self) -> Result<String, AfbError> {
+        //retreive client sni hostname target (Fulup TDB check with Jose why it fails)
+        const MAX_HOST_LEN: usize = 255;
+        let client_sni = unsafe {
+            let mut hostname_sni = mem::MaybeUninit::<[u8; MAX_HOST_LEN]>::uninit();
+            let mut hostname_type: u32 = 0;
+            let status = cglue::gnutls_server_name_get(
+                self.xsession,
+                hostname_sni.as_mut_ptr() as *mut raw::c_void,
+                MAX_HOST_LEN as *mut usize,
+                &mut hostname_type as *mut u32,
+                0,
+            );
+            if status < 0 {
+                return afb_error!(
+                    "gtls-session-hostname",
+                    "fail to retreive client sni hostname error:{}",
+                    gtls_perror(status)
+                );
+            }
+            let sni = hostname_sni.assume_init();
+            CStr::from_ptr(&sni as *const _ as *mut raw::c_char)
+        };
+
+        let sni = match client_sni.to_str() {
+            Ok(value) => value,
+            Err(_) => return afb_error!("gtls-session-hostname", "invalid client SNI hostname",),
+        };
+
+        afb_log_msg!(Debug, None, "gtls client hostname sni:{}", sni);
+        Ok(sni.to_string())
     }
 
     pub fn close(&self) {
@@ -760,6 +959,11 @@ impl GnuTlsSession {
         Ok(ret as usize)
     }
 
+    pub fn get_version(&self) -> GnuTlsVersion {
+        let version = unsafe { cglue::gnutls_protocol_get_version(self.xsession) };
+        GnuTlsVersion::from_u32(version)
+    }
+
     pub fn client_handshake(&self) -> Result<(), AfbError> {
         let status = unsafe { cglue::gnutls_handshake(self.xsession) };
         if status < 0 {
@@ -787,10 +991,12 @@ impl GnuTlsSession {
 
 pub struct GnuTlsConfig {
     version: String,
-    hostname: Option<&'static str>,
+    client_sni: Option<&'static str>,
     tls_psk: Option<&'static str>,
     priority: CString,
     xcred: cglue::gnutls_certificate_credentials_t,
+    authent: cglue::gnutls_credentials_type_t,
+    logger: Rc<TlsKeyLogger>,
 }
 impl GnuTlsConfig {
     pub fn new(
@@ -798,10 +1004,11 @@ impl GnuTlsConfig {
         key_path: &str,
         key_pin: Option<&str>,
         ca_path: Option<&str>,
-        hostname: Option<&'static str>,
+        client_sni: Option<&'static str>,
         tls_psk: Option<&'static str>,
+        psk_log: Option<&'static str>,
     ) -> Result<Self, AfbError> {
-        const GNUTLS_PRIORITY: &str = "NORMAL:-VERS-TLS-ALL:+VERS-TLS1.2";
+        const GLNU_TLS2_PRIO: &str = "NORMAL:-VERS-TLS-ALL:+VERS-TLS1.2:+VERS-TLS1.3";
         const GLNU_TLS3_PRIO: &str =
             "SECURE128:-VERS-SSL3.0:-VERS-TLS1.0:-ARCFOUR-128:+PSK:+DHE-PSK";
         const GNU_TLS_MIN_VER: &str = "3.4.6";
@@ -913,9 +1120,18 @@ impl GnuTlsConfig {
         }
 
         // If tls_psk then use TLS-1.3 otherwise use TLS-1.2
-        let priority = match tls_psk {
-            None => CString::new(GNUTLS_PRIORITY).unwrap(),
-            Some(_psk) => {
+        let (priority, authent) = match tls_psk {
+            None => (
+                GLNU_TLS2_PRIO,
+                cglue::gnutls_credentials_type_t_GNUTLS_CRD_CERTIFICATE,
+            ),
+            Some(psk) => {
+                afb_log_msg!(
+                    Warning,
+                    None,
+                    "{{PRE_SHARED_KEY(for-test-only) psk:'{}'}}",
+                    psk
+                );
                 unsafe {
                     let mut psk_cred =
                         mem::MaybeUninit::<cglue::gnutls_psk_server_credentials_t>::uninit();
@@ -935,19 +1151,21 @@ impl GnuTlsConfig {
                         Some(pre_share_key_cb),
                     );
                 };
-                CString::new(GLNU_TLS3_PRIO).unwrap()
+                (
+                    GLNU_TLS3_PRIO,
+                    cglue::gnutls_credentials_type_t_GNUTLS_CRD_PSK,
+                )
             }
         };
 
-        // prepare priority C string for session::new
-        let priority = CString::new(priority).unwrap();
-
         let config = GnuTlsConfig {
             version,
-            hostname,
+            client_sni,
             tls_psk,
             xcred,
-            priority,
+            authent,
+            priority: CString::new(priority).unwrap(),
+            logger: Rc::new(TlsKeyLogger::new(psk_log)?),
         };
         Ok(config)
     }

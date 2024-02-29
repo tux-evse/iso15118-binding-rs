@@ -76,6 +76,10 @@ impl TcpClient {
         Ok(count)
     }
 
+    pub fn get_source(&self) -> net::SocketAddr {
+        self.source.clone()
+    }
+
     pub fn send(&self, buffer: &[u8]) -> Result<usize, AfbError> {
         let mut data_set = self.get_cell()?;
         let count = match data_set.stream.write(buffer) {

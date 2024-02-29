@@ -16,8 +16,12 @@ if test -z "$DEVTOOL_PORT"; then
     DEVTOOL_PORT=1234
 fi
 
+if test -z "$SSLKEYLOGFILE"; then
+    export SSLKEYLOGFILE="/tmp/gnu-tls.log"
+fi
+
 if test -z "$IFACE_EVSE"; then
-export IFACE_EVSE=veth-dbg
+export IFACE_EVSE=lo
 fi
 
 if test -z "$PKI_TLS_DIR"; then

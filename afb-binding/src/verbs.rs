@@ -38,8 +38,8 @@ fn async_sdp_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &mut AsyncSdpCtx) -> Result
         let request = SdpRequest::new(&buffer)?;
         request.check_header()?;
 
-        let transport= request.get_transport();
-        let security= request.get_security();
+        let transport = request.get_transport();
+        let security = request.get_security();
 
         let port = match &security {
             SdpSecurityModel::TLS => ctx.tls_port,
@@ -165,9 +165,18 @@ AfbEvtFdRegister!(AsyncTlsCb, async_tls_cb, AsyncTlsCtx);
 fn async_tls_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &mut AsyncTlsCtx) -> Result<(), AfbError> {
     if revent == AfbEvtFdPoll::IN.bits() {
         let tls_client = ctx.tls.accept_client()?;
+        let source= tls_client.get_source();
         let sockfd = tls_client.get_sockfd()?;
         let tls_connection = TlsConnection::new(ctx.config, tls_client)?;
         tls_connection.client_handshake()?;
+
+        afb_log_msg!(
+            Notice,
+            None,
+            "New connection client:{} protocol:{}",
+            source,
+            tls_connection.get_version().to_string()
+        );
 
         AfbEvtFd::new("tls-client")
             .set_fd(sockfd)

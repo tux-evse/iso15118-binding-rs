@@ -8,9 +8,10 @@
             "request": "launch",
             "program": "afb-binder",
             "env": {
-                "IFACE_EVSE": "enp0s20f0u4u1",
+                "IFACE_EVSE": "lo",
                 "PKI_TLS_DIR": "afb-test/etc",
-                "LD_LIBRARY_PATH": "/usr/local/lib64"
+                "LD_LIBRARY_PATH": "/usr/local/lib64",
+                "SSLKEYLOGFILE": "/tmp/gnu-tls.log"
             },
             "args": [
                 "-vv","--monitoring",

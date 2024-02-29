@@ -77,11 +77,17 @@ socat -6 'TCP-CONNECT:[::1]:61341' stdio
 
 Sending TLS data
 ```
+# using lo loopback (TCP/TLS only test)
+socat -6 "OPENSSL-CONNECT:[::1]:64109,cert=afb-test/etc/_client-cert.pem,verify=0,snihost=tux-evse," stdio
+
+# enforcing TLS-1.3 (require socat 1.7.4++)
+socat -6 "OPENSSL-CONNECT:[::1]:64109,cert=afb-test/etc/_client-cert.pem,openssl-min-proto-version=TLS1.3,snihost=tux-evse,verify=0" stdio
+
 # Fulup TBD check with Stephane to fix bash
 export IFACE_EVSE=eth-xxx
 export VETH_IPV6=`ip -6 addr show dev ${IFACE_EVSE} | grep inet6 | awk '{print $2}' | awk -F '/' '{print $1}'`; echo "VETH_IPV6=$VETH_IPV6"
-socat -6 "OPENSSL-CONNECT:[${VETH_IPV6}%${IFACE_EVSE}]:64109,cert=afb-test/etc/_client-cert.pem,verify=0" stdio
-socat -6 OPENSSL-CONNECT:[${VETH_IPV6}%${IFACE_EVSE}]:64109,cert=afb-test/etc/_client-cert.pem,cert=afb-test/etc/_trialog-oem-cert.pem stdio
+socat -6 "OPENSSL-CONNECT:[${VETH_IPV6}%${IFACE_EVSE}]:64109,cert=afb-test/etc/_client-cert.pem,verify=0,openssl-min-proto-version=TLS1.3,snihost=tux-evse" stdio
+socat -6 OPENSSL-CONNECT:[${VETH_IPV6}%${IFACE_EVSE}]:64109,cert=afb-test/etc/_client-cert.pem,cert=afb-test/etc/_trialog-oem-cert.pem,openssl-min-proto-version=TLS1.3 stdio
 ```
 
 Debugging target eth2

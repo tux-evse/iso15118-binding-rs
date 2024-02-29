@@ -10,9 +10,6 @@
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
  *
- *   references:
- *    https://github.com/rustls/rustls/blob/main/examples/src/bin/simpleserver.rs
- *
  */
 
 use crate::prelude::*;
@@ -31,10 +28,10 @@ impl Drop for TlsConnection {
 
 impl TlsConnection {
     pub fn new(config: &TlsConfig, client: TcpClient) -> Result<Self, AfbError> {
-        // create a new tls session for server TlsConfig
+        // create a new tls segit pullssion for server TlsConfig
         let sockfd = client.get_sockfd()?;
         let session = GnuTlsSession::new(&config.gtls, sockfd)?;
-        // &session.set_hostname(config);
+        // &session.set_client_sni(config);
 
         let connection = TlsConnection { session, client };
         Ok(connection)
@@ -43,6 +40,10 @@ impl TlsConnection {
     pub fn get_sockfd(&self) -> Result<i32, AfbError> {
         let sockfd = self.client.get_sockfd()?;
         Ok(sockfd)
+    }
+
+    pub fn get_version(&self) -> GnuTlsVersion {
+        self.session.get_version()
     }
 
     pub fn client_handshake(&self) -> Result<(), AfbError> {
@@ -81,16 +82,18 @@ impl TlsConfig {
         key_file: &str,
         key_pin:Option<&str>,
         ca_oem: Option<&str>,
-        hostname: Option<&'static str>,
+        client_sni: Option<&'static str>,
         tls_psk: Option<&'static str>,
+        psk_log: Option<&'static str>,
     ) -> Result<&'static Self, AfbError> {
         let config = GnuTlsConfig::new(
             cert_file,
             key_file,
             key_pin,
             ca_oem,
-            hostname,
+            client_sni,
             tls_psk,
+            psk_log,
         )?;
 
         let handle = Box::new(TlsConfig { gtls: config });
