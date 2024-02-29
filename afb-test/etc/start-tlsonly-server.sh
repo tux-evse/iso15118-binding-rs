@@ -13,21 +13,20 @@ CONFDIR=`pwd`/etc
 mkdir -p /tmp/api
 
 if test -z "$DEVTOOL_PORT"; then
-    DEVTOOL_PORT=1235
+    DEVTOOL_PORT=1234
 fi
 
-if test -z "$IFACE"; then
-export IFACE=veth-dbg
+if test -z "$IFACE_EVSE"; then
+export IFACE_EVSE=veth-dbg
 fi
 
 if test -z "$PKI_TLS_DIR"; then
 export PKI_TLS_DIR=$CONFDIR
 fi
 
-echo iso15118 debug mode iface=$IFACE config=$CONFDIR/*.json port=$DEVTOOL_PORT
+echo iso15118 debug mode IFACE_EVSE=$IFACE_EVSE config=$CONFDIR/*.json port=$DEVTOOL_PORT
 
 afb-binder --name=afb-iso15118 --port=$DEVTOOL_PORT -v \
   --config=$ROOTDIR/../afb-binding/etc/binder-iso15118.json \
   --config=$ROOTDIR/../afb-binding/etc/binding-iso15118.json \
-  --config=$CONFDIR/binding-iso15118-loopbk.json \
   $*

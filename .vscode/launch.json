@@ -8,6 +8,8 @@
             "request": "launch",
             "program": "afb-binder",
             "env": {
+                "IFACE_EVSE": "enp0s20f0u4u1",
+                "PKI_TLS_DIR": "afb-test/etc",
                 "LD_LIBRARY_PATH": "/usr/local/lib64"
             },
             "args": [

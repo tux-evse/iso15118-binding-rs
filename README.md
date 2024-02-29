@@ -78,12 +78,18 @@ socat -6 'TCP-CONNECT:[::1]:61341' stdio
 Sending TLS data
 ```
 # Fulup TBD check with Stephane to fix bash
-export VETH_IPV6=`ip -6 addr show dev veth-dbg | grep inet6 | awk '{print $2}' | awk -F '/' '{print $1}'`; echo "VETH_IPV6=$VETH_IPV6"
-socat -6 "OPENSSL-CONNECT:[${VETH_IPV6}%veth-dbg]:64109,cert=afb-test/etc/_client-cert.pem,verify=0" stdio
-socat -6 OPENSSL-CONNECT:[${VETH_IPV6}%veth-dbg]:64109,cert=afb-test/etc/_client-cert.pem,cert=afb-test/etc/_trialog-oem-cert.pem stdio
+export IFACE_EVSE=eth-xxx
+export VETH_IPV6=`ip -6 addr show dev ${IFACE_EVSE} | grep inet6 | awk '{print $2}' | awk -F '/' '{print $1}'`; echo "VETH_IPV6=$VETH_IPV6"
+socat -6 "OPENSSL-CONNECT:[${VETH_IPV6}%${IFACE_EVSE}]:64109,cert=afb-test/etc/_client-cert.pem,verify=0" stdio
+socat -6 OPENSSL-CONNECT:[${VETH_IPV6}%${IFACE_EVSE}]:64109,cert=afb-test/etc/_client-cert.pem,cert=afb-test/etc/_trialog-oem-cert.pem stdio
 ```
 
 Debugging target eth2
 ```
-ssh root@phytec-power.tuxevse.vpn "tcpdump -s0 -U -n -w - -i eth2" | wireshark -i -
+# ssh root@phytec-power.tuxevse.vpn "tcpdump -s0 -U -n -w - -i eth2" | wireshark -i -
+```
+
+Trialog
+```
+# curl -X POST http://trialog.tuxevse.vpn:15110/api/iec-1/bcb # Simulate BtoC toggle
 ```

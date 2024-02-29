@@ -155,7 +155,7 @@ pub fn get_iface_addrs(iface: &str, filter: u16) -> Result<IfaceAddr6, AfbError>
         None => {
             return afb_error!(
                 "ipv6-iface-match",
-                "fail to find IPV6 iface:'{}' filter:'{}'",
+                "fail to find IPV6 iface:'{}' filter:'{:#x}'",
                 iface,
                 filter
             )
