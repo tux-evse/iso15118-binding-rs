@@ -34,7 +34,7 @@ impl AfbApiControls for ApiUserData {
         let sdp_addr6 = get_iface_addrs(&self.iface, self.prefix)?;
 
         // start TCP ws-server
-        let tcp = TcpServer::new("tcp-wserver", &sdp_addr6, self.tcp_port)?;
+        let tcp = TcpServer::new(api,"tcp-wserver", &sdp_addr6, self.tcp_port)?;
         AfbEvtFd::new(tcp.get_uid())
             .set_fd(tcp.get_sockfd())
             .set_events(AfbEvtFdPoll::IN)
@@ -42,7 +42,7 @@ impl AfbApiControls for ApiUserData {
             .start()?;
 
         // start TLS ws-server
-        let tls = TcpServer::new("tls-wserver", &sdp_addr6, self.tls_port)?;
+        let tls = TcpServer::new(api,"tls-wserver", &sdp_addr6, self.tls_port)?;
         AfbEvtFd::new(tls.get_uid())
             .set_fd(tls.get_sockfd())
             .set_events(AfbEvtFdPoll::IN)
@@ -53,7 +53,7 @@ impl AfbApiControls for ApiUserData {
             .start()?;
 
         // start SDP discovery service
-        let sdp = SdpServer::new("sdp-server", self.iface, self.sdp_port)?;
+        let sdp = SdpServer::new(api,"sdp-server", self.iface, self.sdp_port)?;
         AfbEvtFd::new(sdp.get_uid())
             .set_fd(sdp.get_sockfd())
             .set_events(AfbEvtFdPoll::IN)
@@ -64,7 +64,6 @@ impl AfbApiControls for ApiUserData {
                 tls_port: self.tls_port,
             }))
             .start()?;
-
         Ok(())
     }
 

@@ -18,45 +18,45 @@
 
 use crate::prelude::*;
 use afbv4::prelude::*;
-use std::cell::{RefCell, RefMut};
 use std::io::{Read, Write};
 use std::net;
 use std::os::unix::io::AsRawFd;
-
-pub struct ClientState {
-    pub stream: net::TcpStream,
-}
+use std::sync::{Mutex, MutexGuard};
 
 impl Drop for TcpClient {
     fn drop(&mut self) {
-       println!("**** TcpClient drop");
-       let _= self.close();
+        println!("**** TcpClient drop");
+        let _ = self.close();
     }
 }
 
+pub struct ClientState {
+    pub connection: net::TcpStream,
+}
+
 pub struct TcpClient {
-    data_set: RefCell<ClientState>,
     source: net::SocketAddr,
+    data_set: Mutex<ClientState>,
 }
 
 impl TcpClient {
     #[track_caller]
-    pub fn get_cell(&self) -> Result<RefMut<'_, ClientState>, AfbError> {
-        match self.data_set.try_borrow_mut() {
+    pub fn get_handle(&self) -> Result<MutexGuard<'_, ClientState>, AfbError> {
+        match self.data_set.lock() {
             Err(_) => return afb_error!("sock-client-state", "fail to access &mut data_set"),
             Ok(value) => Ok(value),
         }
     }
 
     pub fn get_sockfd(&self) -> Result<i32, AfbError> {
-        let data_set = self.get_cell()?;
-        let sockfd = data_set.stream.as_raw_fd();
+        let data_set = self.get_handle()?;
+        let sockfd = data_set.connection.as_raw_fd();
         Ok(sockfd as i32)
     }
 
     pub fn close(&self) -> Result<(), AfbError> {
-        let data_set = self.get_cell()?;
-        match data_set.stream.shutdown(net::Shutdown::Both) {
+        let data_set = self.get_handle()?;
+        match data_set.connection.shutdown(net::Shutdown::Both) {
             Ok(_) => {}
             Err(_) => {
                 return afb_error!("sock-client-close", "fail to close client:{}", &self.source)
@@ -65,10 +65,10 @@ impl TcpClient {
         Ok(())
     }
 
-    pub fn get(&self, buffer: &mut [u8]) -> Result<usize, AfbError> {
-        let mut data_set = self.get_cell()?;
-        let count = match data_set.stream.read(buffer) {
-            Ok(count) => count,
+    pub fn get_data(&self, buffer: &mut [u8]) -> Result<u32, AfbError> {
+        let mut data_set = self.get_handle()?;
+        let count = match data_set.connection.read(buffer) {
+            Ok(count) => count as u32,
             Err(_) => {
                 return afb_error!("sock-client-read", "fail to read client:{}", &self.source)
             }
@@ -81,8 +81,8 @@ impl TcpClient {
     }
 
     pub fn send(&self, buffer: &[u8]) -> Result<usize, AfbError> {
-        let mut data_set = self.get_cell()?;
-        let count = match data_set.stream.write(buffer) {
+        let mut data_set = self.get_handle()?;
+        let count = match data_set.connection.write(buffer) {
             Ok(count) => count,
             Err(_) => {
                 return afb_error!("sock-client-write", "fail to write client:{}", &self.source)
@@ -98,13 +98,18 @@ pub struct TcpServer {
 }
 
 impl TcpServer {
-    pub fn new(uid: &'static str, addr: &IfaceAddr6, port: u16) -> Result<Self, AfbError> {
+    pub fn new(
+        api: &AfbApi,
+        uid: &'static str,
+        addr: &IfaceAddr6,
+        port: u16,
+    ) -> Result<Self, AfbError> {
         let addrv6 = addr.get_addr();
         let scopv6 = addr.get_scope();
 
         let socket = net::SocketAddrV6::new(addrv6, port, 0, scopv6);
 
-        println! {"socket:{}", socket};
+        afb_log_msg!(Notice, api, "{} listen socket:{}", uid, socket);
         let listener = match net::TcpListener::bind(socket) {
             Ok(value) => value,
             Err(error) => {
@@ -131,9 +136,9 @@ impl TcpServer {
 
     pub fn accept_client(&self) -> Result<TcpClient, AfbError> {
         let client = match self.listener.accept() {
-            Ok((stream, source)) => TcpClient {
-                data_set: RefCell::new(ClientState { stream }),
+            Ok((connection, source)) => TcpClient {
                 source,
+                data_set: Mutex::new(ClientState{connection}),
             },
             Err(_) => {
                 return afb_error!(

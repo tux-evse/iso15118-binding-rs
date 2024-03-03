@@ -17,9 +17,9 @@
  * Generate Rust structures for Din/ISO15118-2/20 messages.
  *
  */
+#include <iso15118/sdp-v2g-encoders.h>
+#include <iso15118/exi_error_codes.h>
+#include <iso15118/exi_v2gtp.h>
+#include <iso15118/appHand_Decoder.h>
 
-#include <iso15118/din_msgDefDatatypes.h>
-#include <iso15118/iso2_msgDefDatatypes.h>
-#include <iso15118/iso20_AC_Datatypes.h>
-#include <iso15118/iso20_DC_Datatypes.h>
-#include <iso15118/iso20_ACDP_Datatypes.h>
+const size_t EXI_MAX_DOCUMENT_SIZE= 8192;

@@ -14,6 +14,7 @@
 
 use crate::prelude::*;
 use afbv4::prelude::*;
+use std::net;
 
 pub struct TlsConnection {
     session: &'static GnuTlsSession,
@@ -51,9 +52,13 @@ impl TlsConnection {
         Ok(())
     }
 
-    pub fn recv(&self, buffer: &mut [u8]) -> Result<usize, AfbError> {
+    pub fn get_source (&self) -> net::SocketAddr {
+        self.client.get_source()
+    }
+
+    pub fn recv(&self, buffer: &mut [u8]) -> Result<u32, AfbError> {
         let count = self.session.recv(buffer)?;
-        Ok(count)
+        Ok(count as u32)
     }
 
     pub fn send(&self, buffer: &[u8]) -> Result<usize, AfbError> {

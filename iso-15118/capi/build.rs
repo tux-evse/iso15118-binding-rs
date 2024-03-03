@@ -12,6 +12,7 @@ fn main() {
     // invalidate the built crate whenever the wrapper changes
     println!("cargo:rustc-link-search=/usr/local/lib64");
     println!("cargo:rustc-link-arg=-liso15118");
+    println!("cargo:rustc-link-arg=-lgnutls");
 
     if let Ok(value) = env::var("CARGO_TARGET_DIR") {
         if let Ok(profile) = env::var("PROFILE") {
@@ -55,16 +56,13 @@ fn main() {
         .allowlist_function("ntoh.*")
         .allowlist_function(".*ifaddrs")
         .allowlist_function("gnutls_.*")
-        .allowlist_function("sdp_v2g_.*")
         .allowlist_type("gnutls_.*")
-        .allowlist_var("SDP_.*")
         .generate()
         .expect("Unable to generate _capi-network");
 
     libcapi
         .write_to_file("capi/_capi-network.rs")
-        .expect("Couldn't write libcapi!");
-
+        .expect("Couldn't write _capi-network.rs!");
 
     let header = "
     // -----------------------------------------------------------------------
@@ -83,15 +81,20 @@ fn main() {
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .derive_debug(false)
         .layout_tests(false)
-        .allowlist_function("iso2_.*")
-        .allowlist_type("iso2_.*")
-        .allowlist_var("iso2_.*")
-        .allowlist_function("din_.*")
-        .allowlist_function("iso20_.*")
+        .allowlist_item("sdp_.*")
+        .allowlist_item("iso2_.*")
+        .allowlist_item("din_.*")
+        .allowlist_item("iso20_.*")
+        .allowlist_item("exi_.*")
+        .allowlist_var("SDP_.*")
+        .allowlist_var("EXI_.*")
+        .allowlist_item("V2GTP.*")
+        .allowlist_type(".*_exiDocument")
+        .allowlist_function("decode_.*")
         .generate()
         .expect("Unable to generate _capi-encoders");
 
     libcapi
         .write_to_file("capi/_capi-encoders.rs")
-        .expect("Couldn't write libcapi!");
+        .expect("Couldn't write _capi-encoders.rs!");
 }

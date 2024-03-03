@@ -46,12 +46,19 @@ mod tcp;
 #[path = "ipv6-tls.rs"]
 mod tls;
 
+#[path = "exi-transport.rs"]
+mod transport;
+
+#[path = "manager.rs"]
+mod manager;
 
 pub mod prelude {
     pub(crate) use crate::network::*;
-    //pub(crate) use crate::encoders::*;
+    pub(crate) use crate::encoders::*;
     pub use crate::network::{get_iface_addrs, IfaceAddr6};
     pub use crate::sdp::*;
     pub use crate::tls::*;
     pub use crate::tcp::*;
+    pub use crate::transport::*;
+    pub use crate::manager::*;
 }

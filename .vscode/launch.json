@@ -14,7 +14,8 @@
                 "SSLKEYLOGFILE": "/tmp/gnu-tls.log"
             },
             "args": [
-                "-vv","--monitoring",
+                "-vv",
+                "--monitoring",
                 "--trap-faults=0",
                 "--config=afb-binding/etc/binder-iso15118.json",
                 "--config=afb-binding/etc/binding-iso15118.json",
@@ -25,7 +26,7 @@
                 "settings set target.disable-aslr false"
             ]
         },
-                {
+        {
             "name": "Remote Slac+ISO",
             "type": "lldb",
             "preLaunchTask": "iso15118-test-build",
@@ -33,16 +34,17 @@
             "program": "afb-binder",
             "env": {
                 "LD_LIBRARY_PATH": "/usr/local/lib64",
-                "IFACE_PEV":"veth-dbg",
+                "IFACE_PEV": "veth-dbg",
                 "IFACE_EVSE": "veth-dbg",
                 "PKI_TLS_DIR": "afb-test/etc"
             },
             "args": [
-                "-vv","--monitoring",
+                "-vv",
+                "--monitoring",
                 "--trap-faults=0",
                 "--config=afb-binding/etc/binder-iso15118.json",
                 "--config=afb-binding/etc/binding-iso15118.json",
-                "--config=afb-test/etc/binding-isoslac-test.json" ,
+                "--config=afb-test/etc/binding-isoslac-test.json",
                 "--config=afb-test/etc/binding-isotap-test.json",
             ],
             "cwd": "${workspaceFolder}",
@@ -52,41 +54,23 @@
             ]
         },
         {
-            "name": "Remote iso15118",
+            "name": "Trialog eth0 iso15118",
             "type": "lldb",
             "preLaunchTask": "iso15118-native-build",
             "request": "launch",
             "program": "afb-binder",
             "env": {
-                "LD_LIBRARY_PATH": "/usr/local/lib64"
+                "LD_LIBRARY_PATH": "/usr/local/lib64",
+                "IFACE_PEV": "eth0", // "enp0s31f6",
+                "IFACE_EVSE": "eth0", // "enp0s31f6",
+                "PKI_TLS_DIR": "afb-test/etc"
             },
             "args": [
-                "-v","--monitoring",
+                "-v",
+                "--monitoring",
                 "--trap-faults=0",
                 "--config=afb-binding/etc/binder-iso15118.json",
                 "--config=afb-binding/etc/binding-iso15118.json",
-            ],
-            "cwd": "${workspaceFolder}",
-            "initCommands": [
-                "target stop-hook add -n _start -o continue",
-                "settings set target.disable-aslr false"
-            ]
-        },
-                {
-            "name": "Loopback iso15118",
-            "type": "lldb",
-            "preLaunchTask": "iso15118-test-build",
-            "request": "launch",
-            "program": "afb-binder",
-            "env": {
-                "LD_LIBRARY_PATH": "/usr/local/lib64"
-            },
-            "args": [
-                "-v","--monitoring",
-                "--trap-faults=0",
-                "--config=afb-binding/etc/binder-iso15118.json",
-                "--config=afb-binding/etc/binding-iso15118.json",
-                "--config=afb-test/etc/binding-loopbk-test.json",
             ],
             "cwd": "${workspaceFolder}",
             "initCommands": [
@@ -94,6 +78,5 @@
                 "settings set target.disable-aslr false"
             ]
         }
-
     ]
 }

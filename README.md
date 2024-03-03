@@ -96,6 +96,19 @@ Debugging target eth2
 ```
 
 Trialog
+
+Note: I had to unconnect/reconnect my ethernet laptop to get combo starting talking IPV6
+
 ```
 # curl -X POST http://trialog.tuxevse.vpn:15110/api/iec-1/bcb # Simulate BtoC toggle
-```
+# curl -X POST http://trialog.tuxevse.vpn:15110/api/plugout # Simulate plugout
+# curl -X POST http://trialog.tuxevse.vpn:15110/api/plugin # Send SDP as IPV6 localink multicast```
+
+Debug Fulup
+-----------
+                                {
+                                    // the string seems to be in the table, but this is not supported
+                                    error = EXI_ERROR__STRINGVALUES_NOT_SUPPORTED;
+                                }
+                            }
+                        }
