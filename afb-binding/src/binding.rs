@@ -12,8 +12,7 @@
 
 use crate::prelude::*;
 use afbv4::prelude::*;
-use iso15118::prelude::*;
-use typesv4::prelude::*;
+use nettls::prelude::*;
 
 pub struct BindingConfig {}
 
@@ -23,46 +22,61 @@ struct ApiUserData {
     tls_port: u16,
     tcp_port: u16,
     prefix: u16,
-    tls_conf: &'static TlsConfig,
+    tls_conf: Option<&'static TlsConfig>,
 }
 impl AfbApiControls for ApiUserData {
     // the API is created and ready. At this level user may subcall api(s) declare as dependencies
     fn start(&mut self, api: &AfbApi) -> Result<(), AfbError> {
-        afb_log_msg!(Notice, api, "iface:{} sdp:{}", self.iface, self.sdp_port);
+        afb_log_msg!(
+            Notice,
+            api,
+            "iface:{} sdp:{} prefix:{:#0x}",
+            self.iface,
+            self.sdp_port,
+            self.prefix
+        );
 
         // get iface ipv6-addr matching prefix (local-link?)
         let sdp_addr6 = get_iface_addrs(&self.iface, self.prefix)?;
 
         // start TCP ws-server
-        let tcp = TcpServer::new(api,"tcp-wserver", &sdp_addr6, self.tcp_port)?;
+        let tcp = TcpServer::new(api, "tcp-wserver", &sdp_addr6, self.tcp_port)?;
         AfbEvtFd::new(tcp.get_uid())
             .set_fd(tcp.get_sockfd())
-            .set_events(AfbEvtFdPoll::IN)
-            .set_callback(Box::new(AsyncTcpCtx { tcp }))
+            .set_events(AfbEvtFdPoll::IN | AfbEvtFdPoll::RUP)
+            .set_callback(async_tcp_cb)
+            .set_autounref(true)
+            .set_context(AsyncTcpCtx { tcp })
             .start()?;
 
-        // start TLS ws-server
-        let tls = TcpServer::new(api,"tls-wserver", &sdp_addr6, self.tls_port)?;
-        AfbEvtFd::new(tls.get_uid())
-            .set_fd(tls.get_sockfd())
-            .set_events(AfbEvtFdPoll::IN)
-            .set_callback(Box::new(AsyncTlsCtx {
-                tls,
-                config: self.tls_conf,
-            }))
-            .start()?;
+        if let Some(tls_conf) = self.tls_conf {
+            // start TLS ws-server
+            let tls = TcpServer::new(api, "tls-wserver", &sdp_addr6, self.tls_port)?;
+            AfbEvtFd::new(tls.get_uid())
+                .set_fd(tls.get_sockfd())
+                .set_events(AfbEvtFdPoll::IN | AfbEvtFdPoll::RUP)
+                .set_autounref(true)
+                .set_callback(async_tls_cb)
+                .set_context(AsyncTlsCtx {
+                    tls,
+                    config: tls_conf,
+                })
+                .start()?;
+        }
 
         // start SDP discovery service
-        let sdp = SdpServer::new(api,"sdp-server", self.iface, self.sdp_port)?;
+        let sdp = SdpServer::new("sdp-server", self.iface, self.sdp_port)?;
         AfbEvtFd::new(sdp.get_uid())
             .set_fd(sdp.get_sockfd())
-            .set_events(AfbEvtFdPoll::IN)
-            .set_callback(Box::new(AsyncSdpCtx {
+            .set_events(AfbEvtFdPoll::IN | AfbEvtFdPoll::RUP)
+            .set_autounref(true)
+            .set_callback(async_sdp_cb)
+            .set_context(AsyncSdpCtx {
                 sdp,
                 sdp_addr6,
                 tcp_port: self.tcp_port,
                 tls_port: self.tls_port,
-            }))
+            })
             .start()?;
         Ok(())
     }
@@ -85,28 +99,35 @@ pub fn binding_init(rootv4: AfbApiV4, jconf: JsoncObj) -> Result<&'static AfbApi
     let prefix = jconf.default::<u32>("ip6_prefix", 0xFE80)? as u16;
     let sdp_port = jconf.default::<u32>("sdp_port", 15118)? as u16;
     let tcp_port = jconf.default::<u32>("tcp_port", 61341)? as u16;
-    let tls_port = jconf.default::<u32>("tls_port", 64109)? as u16;
-    let cert_file = jconf.get::<&str>("tls_cert")?;
-    let priv_key = jconf.get::<&str>("tls_key")?;
-    let pin_key = jconf.optional::<&str>("tls_pin")?;
-    let ca_oem = jconf.optional::<&str>("tls_oem")?;
-    let client_sni = jconf.optional::<&'static str>("client_sni")?;
-    let tls_psk = jconf.optional::<&'static str>("tls_pks")?;
-    let psk_log = jconf.optional::<&'static str>("psk_log")?;
 
-    // parse and load TLS certificates at binding init
-    let tls_conf = TlsConfig::new(
-        cert_file,
-        priv_key,
-        pin_key,
-        ca_oem,
-        client_sni,
-        tls_psk,
-        psk_log,
-    )?;
+    let (tls_conf, tls_port) = match jconf.optional::<JsoncObj>("tsl")? {
+        None => (None, 0),
+        Some(jtls) => {
+            let tls_port = jconf.default::<u32>("port", 64109)? as u16;
+            let cert_chain = jtls.get::<&str>("certs")?;
+            let priv_key = jtls.get::<&str>("key")?;
+            let pin_key = jtls.optional::<&str>("pin")?;
+            let tls_psk = jtls.optional::<&'static str>("pks")?;
+            let tls_trust = jtls.optional::<&'static str>("trust")?;
+            let tls_verbosity = jtls.default::<i32>("verbosity", 1)?;
+            let tls_proto = jtls.optional::<&'static str>("proto")?;
+            let psk_log = jtls.optional::<&'static str>("psk_log")?;
 
-    // register data converter
-    iso15118_registers()?;
+            (
+                Some(TlsConfig::new(
+                    cert_chain,
+                    priv_key,
+                    pin_key,
+                    tls_trust,
+                    tls_psk,
+                    psk_log,
+                    tls_verbosity,
+                    tls_proto,
+                )?),
+                tls_port,
+            )
+        }
+    };
 
     // create an register frontend api and register init session callback
     let api = AfbApi::new(api)

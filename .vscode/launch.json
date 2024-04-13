@@ -4,11 +4,11 @@
         {
             "name": "Only Tcp/TLS",
             "type": "lldb",
-            "preLaunchTask": "iso15118-native-build",
+            "preLaunchTask": "binding-native-build",
             "request": "launch",
             "program": "afb-binder",
             "env": {
-                "IFACE_EVSE": "lo",
+                "IFACE_EVSE": "evse-veth",
                 "PKI_TLS_DIR": "afb-test/etc",
                 "LD_LIBRARY_PATH": "/usr/local/lib64",
                 "SSLKEYLOGFILE": "/tmp/gnu-tls.log"
@@ -17,8 +17,7 @@
                 "-vv",
                 "--monitoring",
                 "--trap-faults=0",
-                "--config=afb-binding/etc/binder-iso15118.json",
-                "--config=afb-binding/etc/binding-iso15118.json",
+                "--config=afb-binding/etc/binding-iso15118.yaml",
             ],
             "cwd": "${workspaceFolder}",
             "initCommands": [
@@ -54,19 +53,44 @@
             ]
         },
         {
-            "name": "Trialog eth0 iso15118",
+            "name": "Laptop Trialog iso15118",
             "type": "lldb",
-            "preLaunchTask": "iso15118-native-build",
+            "preLaunchTask": "binding-native-build",
             "request": "launch",
             "program": "afb-binder",
             "env": {
                 "LD_LIBRARY_PATH": "/usr/local/lib64",
-                "IFACE_PEV": "eth0", // "enp0s31f6",
-                "IFACE_EVSE": "eth0", // "enp0s31f6",
+                "IFACE_PEV": "enp0s31f6",
+                "IFACE_EVSE": "enp0s31f6",
                 "PKI_TLS_DIR": "afb-test/etc"
             },
             "args": [
-                "-v",
+                "-vv",
+                "--monitoring",
+                "--trap-faults=0",
+                "--config=afb-binding/etc/binder-iso15118.json",
+                "--config=afb-binding/etc/binding-iso15118.json",
+            ],
+            "cwd": "${workspaceFolder}",
+            "initCommands": [
+                "target stop-hook add -n _start -o continue",
+                "settings set target.disable-aslr false"
+            ]
+        },
+        {
+            "name": "Desktop trialog iso15118",
+            "type": "lldb",
+            "preLaunchTask": "binding-native-build",
+            "request": "launch",
+            "program": "afb-binder",
+            "env": {
+                "LD_LIBRARY_PATH": "/usr/local/lib64",
+                "IFACE_PEV": "eth0",
+                "IFACE_EVSE": "eth0",
+                "PKI_TLS_DIR": "afb-test/etc"
+            },
+            "args": [
+                "-vv",
                 "--monitoring",
                 "--trap-faults=0",
                 "--config=afb-binding/etc/binder-iso15118.json",

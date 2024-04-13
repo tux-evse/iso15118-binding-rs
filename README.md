@@ -46,6 +46,20 @@ for further information.
 ```
 sudo setcap cap_net_raw+eip /usr/local/bin/afb-binder
 ```
+### Firewall
+You need to open:
+* 1 UDP port for service discovery
+* 2 TCP port for TCP & TLS
+
+If using firewalld use following commands
+```
+firewall-cmd --list-all-zones # check in which zone your IFACE is located
+firewall-cmd --zone=public --add-port=15118/udp --permanent
+firewall-cmd --zone=public --add-port=:61341/tcp --permanent
+firewall-cmd --zone=public --add-port=:64109/tcp --permanent
+firewall-cmd  --reload
+```
+
 ## Using Socat to send IPV6 probes
 
 check ipv6 multicast routes
@@ -85,9 +99,11 @@ socat -6 "OPENSSL-CONNECT:[::1]:64109,cert=afb-test/etc/_client-cert.pem,openssl
 
 # Fulup TBD check with Stephane to fix bash
 export IFACE_EVSE=eth-xxx
-export VETH_IPV6=`ip -6 addr show dev ${IFACE_EVSE} | grep inet6 | awk '{print $2}' | awk -F '/' '{print $1}'`; echo "VETH_IPV6=$VETH_IPV6"
+export VETH_IPV6=`ip -6 addr show dev ${IFACE_EVSE} | grep inet6| grep fe80 | awk '{print $2}' | awk -F '/' '{print $1}'`; echo "VETH_IPV6=$VETH_IPV6"
 socat -6 "OPENSSL-CONNECT:[${VETH_IPV6}%${IFACE_EVSE}]:64109,cert=afb-test/etc/_client-cert.pem,verify=0,openssl-min-proto-version=TLS1.3,snihost=tux-evse" stdio
 socat -6 OPENSSL-CONNECT:[${VETH_IPV6}%${IFACE_EVSE}]:64109,cert=afb-test/etc/_client-cert.pem,cert=afb-test/etc/_trialog-oem-cert.pem,openssl-min-proto-version=TLS1.3 stdio
+
+socat -6 "OPENSSL-CONNECT:[${VETH_IPV6}%${IFACE_EVSE}]:64109,cert=_trialog/vehicle20-chain.pem,verify=1,openssl-min-proto-version=TLS1.3,cafile=_trialog/v2g20RootCA.pem" stdio
 ```
 
 Debugging target eth2
@@ -100,15 +116,48 @@ Trialog
 Note: I had to unconnect/reconnect my ethernet laptop to get combo starting talking IPV6
 
 ```
-# curl -X POST http://trialog.tuxevse.vpn:15110/api/iec-1/bcb # Simulate BtoC toggle
-# curl -X POST http://trialog.tuxevse.vpn:15110/api/plugout # Simulate plugout
-# curl -X POST http://trialog.tuxevse.vpn:15110/api/plugin # Send SDP as IPV6 localink multicast```
+# curl -X POST http://trialog-ipv4:15110/api/iec-1/bcb # Simulate BtoC toggle
+# curl -X POST http://trialog-ipv4:15110/api/plugout # Simulate plugout
+# curl -X POST http://trialog-ipv4:15110/api/plugin # Send SDP as IPV6 localink multicast```
 
-Debug Fulup
------------
-                                {
-                                    // the string seems to be in the table, but this is not supported
-                                    error = EXI_ERROR__STRINGVALUES_NOT_SUPPORTED;
-                                }
-                            }
-                        }
+Gnu Allocate credential  gnutls_certificate_allocate_credentials
+
+# check certificate
+ # reference: http://gnu.ist.utl.pt/software/gnutls/manual/html_node/Invoking-certtool.html
+ certtool --load-certificate Trialog/certificates/certs/secc20Cert.pem -i
+
+ # list cypher suite
+
+ # default config 1.2+1.3
+ gnutls-cli -l --priority "SECURE128:-VERS-SSL3.0:-VERS-TLS1.0:-ARCFOUR-128:+PSK:+DHE-PSK"
+
+ # retrict to tls-1.2 only
+ gnutls-cli -l --priority "NORMAL:-VERS-TLS-ALL:+VERS-TLS1.2:-VERS-TLS1.3"
+
+# create chain of true from certificate list
+
+
+
+# assemble chain of trust as a unique .pem
+cat _trialog/secc20Cert.pem _trialog/cpo20SubCA2.pem _trialog/cpo20SubCA1.pem > _trialog/secc-chain.pem
+
+# generate pk7s certificate chain
+certtool --p7-generate --load-certificate _trialog/secc-chain.pem  >_trialog/secc-chain.pks7
+
+# sign certificate chain
+certtool --p7-sign --load-privkey _trialog/secc20Cert.key  --load-certificate _trialog/secc-chain.pks7  >_trialog/sess_chain.cert
+
+# Generating a new certificate for Trialog
+```
+# generate private key
+certtool --generate-privkey --outfile tux-evese-key.pem
+
+# generate certificate request
+certtool --generate-request --load-privkey tux-evese-key.pem --outfile tux-evese-csr.pem
+
+# sign certificate
+certtool --generate-certificate --load-request tux-evese-csr.pem --load-ca-certificate _trialog/v2g20RootCA.pem --load-ca-privkey _trialog/v2g20RootCA.key --outfile tux-evese-cert.pem
+
+# verify generated certificate
+ certtool --certificate-info --infile _trialog/secc-chain.pem
+```

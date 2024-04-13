@@ -85,7 +85,7 @@ struct DummyMockCtx {
     label: &'static str,
 }
 AfbVerbRegister!(DummyMockVerb, dummy_request_cb, DummyMockCtx);
-fn dummy_request_cb(rqt: &AfbRequest, _args: &AfbData, ctx: &mut DummyMockCtx) -> Result<(), AfbError> {
+fn dummy_request_cb(rqt: &AfbRequest, _args: &AfbRqtData, ctx: &mut DummyMockCtx) -> Result<(), AfbError> {
     afb_log_msg!(Notice, rqt, "Api mocking:{}", ctx.label);
     rqt.reply(AFB_NO_DATA, 0);
     Ok(())

@@ -2,7 +2,7 @@
 	"version": "2.0.0",
 	"tasks": [
         {
-            "label": "iso15118-native-build",
+            "label": "binding-native-build",
             "type": "cargo",
             "command": "build",
             "problemMatcher": [
@@ -11,7 +11,7 @@
             "group": "build"
         },
         {
-            "label": "iso15118-test-build",
+            "label": "binding-test-build",
             "type": "cargo",
             "command": "build",
             "dependsOn": "iso15118-native-build",
