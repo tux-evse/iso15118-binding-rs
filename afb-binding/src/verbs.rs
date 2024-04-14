@@ -82,32 +82,26 @@ pub fn async_sdp_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<
 
 struct AsyncTcpClientCtx {
     connection: TcpClient,
-    controler: IsoControler,
+    controller: IsoController,
     stream: ExiStream,
     data_len: u32,
     payload_len: u32,
 }
 
-impl Drop for AsyncTcpClientCtx {
-    fn drop(&mut self) {
-        self.stream.drop();
-    }
-}
-
 // New TCP client connecting
-fn async_tcp_client_cb(evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<(), AfbError> {
+fn async_tcp_client_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<(), AfbError> {
     let context = ctx.get_mut::<AsyncTcpClientCtx>()?;
 
     if revent != AfbEvtFdPoll::IN.bits() {
         afb_log_msg!(
             Debug,
             None,
-            "async-tcp-client: closing tcp:{} revent:{:#0x}",
-            context.connection.get_source(), revent
+            "async-tcp-client: closing tcp:{} revent:{:#0x} {:#0x}",
+            context.connection.get_source(),
+            revent,
+            AfbEvtFdPoll::RUP.bits()
         );
-        evtfd.unref();
-        context.connection.close()?;
-        ctx.free();
+        ctx.free::<AsyncTcpClientCtx>();
         return Ok(());
     }
 
@@ -146,7 +140,7 @@ fn async_tcp_client_cb(evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Resul
 
         // decode request and encode response
         context
-            .controler
+            .controller
             .handle_exi_doc(&context.stream, &mut lock)?;
 
         // send response and wipe stream for next request
@@ -160,7 +154,7 @@ fn async_tcp_client_cb(evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Resul
 
 struct AsyncTlsClientCtx {
     connection: TlsConnection,
-    controler: IsoControler,
+    controller: IsoController,
     stream: ExiStream,
     data_len: u32,
     payload_len: u32,
@@ -177,15 +171,13 @@ impl Drop for AsyncTlsClientCtx {
 fn async_tls_client_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<(), AfbError> {
     let context = ctx.get_mut::<AsyncTlsClientCtx>()?;
     if revent != AfbEvtFdPoll::IN.bits() {
-        if revent & AfbEvtFdPoll::HUP.bits() != 0 {
-            afb_log_msg!(
-                Debug,
-                None,
-                "async-tls-client: closing tls client:{}",
-                context.connection.get_source()
-            );
-            ctx.free();
-        }
+        afb_log_msg!(
+            Debug,
+            None,
+            "async-tls-client: closing tls client:{}",
+            context.connection.get_source()
+        );
+        ctx.free::<AsyncTlsClientCtx>();
         return Ok(());
     }
 
@@ -223,7 +215,7 @@ fn async_tls_client_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Resu
 
         // decode request and encode response
         context
-            .controler
+            .controller
             .handle_exi_doc(&context.stream, &mut lock)?;
 
         // send response and wipe stream for next request
@@ -253,7 +245,7 @@ pub fn async_tcp_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<
                 connection: tcp_client,
                 data_len: 0,
                 payload_len: 0,
-                controler: IsoControler::new()?,
+                controller: IsoController::new()?,
                 stream: ExiStream::new(),
             })
             .start()?;
@@ -292,7 +284,7 @@ pub fn async_tls_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<
                 connection: tls_connection,
                 data_len: 0,
                 payload_len: 0,
-                controler: IsoControler::new()?,
+                controller: IsoController::new()?,
                 stream: ExiStream::new(),
             })
             .start()?;
