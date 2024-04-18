@@ -24,7 +24,11 @@ mod verbs;
 #[path = "binding.rs"]
 mod binding;
 
+#[path = "controller.rs"]
+mod controller;
+
 pub(crate) mod prelude {
     pub use crate::binding::*;
     pub use crate::verbs::*;
+    pub use crate::controller::*;
 }

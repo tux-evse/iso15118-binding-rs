@@ -12,7 +12,7 @@
 
 use crate::prelude::*;
 use afbv4::prelude::*;
-use iso15118::prelude::*;
+use iso15118::prelude::{v2g::*, *};
 use nettls::prelude::*;
 //use typesv4::prelude::*;
 
@@ -35,11 +35,11 @@ fn _buffer_to_str(buffer: &[u8]) -> Result<&str, AfbError> {
 }
 
 pub fn async_sdp_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<(), AfbError> {
-    let context = ctx.get_ref::<AsyncSdpCtx>()?;
+    let ctx = ctx.get_ref::<AsyncSdpCtx>()?;
     if revent == AfbEvtFdPoll::IN.bits() {
         // get SDP/UDP packet
         let mut buffer = [0 as u8; mem::size_of::<SdpRequestBuffer>()];
-        context.sdp.read_buffer(&mut buffer)?;
+        ctx.sdp.read_buffer(&mut buffer)?;
 
         let request = SdpRequest::decode(&buffer)?;
         request.check_header()?;
@@ -48,8 +48,8 @@ pub fn async_sdp_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<
         let security = request.get_security();
 
         let port = match &security {
-            SdpSecurityModel::TLS => context.tls_port,
-            SdpSecurityModel::NONE => context.tcp_port,
+            SdpSecurityModel::TLS => ctx.tls_port,
+            SdpSecurityModel::NONE => ctx.tcp_port,
         };
 
         match &transport {
@@ -65,88 +65,98 @@ pub fn async_sdp_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<
             "Respond sdp {:?}:{:?}:[{:?}]:{}",
             &transport,
             &security,
-            &context.sdp_addr6.addr,
+            &ctx.sdp_addr6.addr,
             port
         );
-        let response = SdpResponse::new(
-            context.sdp_addr6.get_addr().octets(),
-            port,
-            transport,
-            security,
-        )
-        .encode()?;
-        context.sdp.send_buffer(&response)?;
+        let response =
+            SdpResponse::new(ctx.sdp_addr6.get_addr().octets(), port, transport, security)
+                .encode()?;
+        ctx.sdp.send_buffer(&response)?;
     }
     Ok(())
 }
 
 struct AsyncTcpClientCtx {
     connection: TcpClient,
-    controller: IsoController,
+    ctrl: IsoController,
     stream: ExiStream,
     data_len: u32,
     payload_len: u32,
 }
 
 // New TCP client connecting
-fn async_tcp_client_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<(), AfbError> {
-    let context = ctx.get_mut::<AsyncTcpClientCtx>()?;
+fn async_tcp_client_cb(
+    _evtfd: &AfbEvtFd,
+    revent: u32,
+    context: &AfbCtxData,
+) -> Result<(), AfbError> {
+    let ctx = context.get_mut::<AsyncTcpClientCtx>()?;
 
     if revent != AfbEvtFdPoll::IN.bits() {
         afb_log_msg!(
             Debug,
             None,
-            "async-tcp-client: closing tcp:{} revent:{:#0x} {:#0x}",
-            context.connection.get_source(),
-            revent,
-            AfbEvtFdPoll::RUP.bits()
+            "async-tcp-client: closing tcp:{}",
+            ctx.connection.get_source()
         );
-        ctx.free::<AsyncTcpClientCtx>();
+        context.free::<AsyncTcpClientCtx>();
         return Ok(());
     }
 
     // move tcp socket data into exi stream buffer
-    let mut lock = context.stream.lock_stream();
+    let mut lock = ctx.stream.lock_stream();
     let read_count = {
-        let (stream_idx, stream_available) = context.stream.get_index(&lock);
+        let (stream_idx, stream_available) = ctx.stream.get_index(&lock);
 
         let read_count = if stream_available == 0 {
             afb_log_msg!(
                 Notice,
                 None,
                 "async_tcp_client {:?}, buffer full close session",
-                context.connection.get_source()
+                ctx.connection.get_source()
             );
-            context.connection.close()?;
+            ctx.connection.close()?;
             return Ok(());
         } else {
             let buffer = &mut lock.buffer[stream_idx..];
-            context.connection.get_data(buffer)?
+            ctx.connection.get_data(buffer)?
         };
 
         // when facing a new exi check how much data should be read
         if stream_idx == 0 {
-            context.payload_len = context.stream.header_check(&lock)?;
-            context.data_len = 0;
+            let len = ctx.stream.get_payload_len(&lock);
+            if len < 0 {
+                afb_log_msg!(
+                    Warning,
+                    None,
+                    "async_tcp_client: packet ignored (invalid v2g header) size:{}",
+                    read_count
+                );
+            } else {
+                ctx.payload_len = len as u32;
+            }
+            ctx.data_len = 0;
         }
         read_count
     };
-
     // if data send in chunks let's complete exi buffer before processing it
-    context.data_len = context.data_len + read_count;
-    if context.data_len == context.payload_len {
+    ctx.data_len = ctx.data_len + read_count;
+    if ctx.data_len >= ctx.payload_len + SDP_V2G_HEADER_LEN as u32 {
         // set data len and decode message and place response into stream-out (stream should not be lock_ined)
-        context.stream.finalize(&lock, context.payload_len)?;
+        ctx.stream.finalize(&lock, ctx.payload_len)?;
+        println!(
+            "**** tcp:v2g({})={}",
+            ctx.stream.get_size(&lock),
+            ctx.stream.dump_buffer(&lock, ExiDump::Everything)?
+        );
 
         // decode request and encode response
-        context
-            .controller
-            .handle_exi_doc(&context.stream, &mut lock)?;
+        ctx.ctrl.iso_decode_payload(&ctx.stream, &mut lock)?;
 
         // send response and wipe stream for next request
-        let response = context.stream.get_buffer(&lock);
-        context.connection.put_data(response)?;
-        context.stream.reset(&lock);
+        let response = ctx.stream.get_buffer(&lock);
+        ctx.connection.put_data(response)?;
+        ctx.stream.reset(&lock);
     }
 
     Ok(())
@@ -154,7 +164,7 @@ fn async_tcp_client_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Resu
 
 struct AsyncTlsClientCtx {
     connection: TlsConnection,
-    controller: IsoController,
+    ctrl: IsoController,
     stream: ExiStream,
     data_len: u32,
     payload_len: u32,
@@ -168,60 +178,83 @@ impl Drop for AsyncTlsClientCtx {
 }
 
 // New TLS client connecting
-fn async_tls_client_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<(), AfbError> {
-    let context = ctx.get_mut::<AsyncTlsClientCtx>()?;
+fn async_tls_client_cb(
+    _evtfd: &AfbEvtFd,
+    revent: u32,
+    context: &AfbCtxData,
+) -> Result<(), AfbError> {
+    let ctx = context.get_mut::<AsyncTlsClientCtx>()?;
     if revent != AfbEvtFdPoll::IN.bits() {
         afb_log_msg!(
             Debug,
             None,
             "async-tls-client: closing tls client:{}",
-            context.connection.get_source()
+            ctx.connection.get_source()
         );
-        ctx.free::<AsyncTlsClientCtx>();
+        context.free::<AsyncTlsClientCtx>();
         return Ok(());
     }
 
     // move tcp socket data into exi stream buffer
-    let mut lock = context.stream.lock_stream();
+    let mut lock = ctx.stream.lock_stream();
     let read_count = {
-        let (stream_idx, stream_available) = context.stream.get_index(&lock);
+        let (stream_idx, stream_available) = ctx.stream.get_index(&lock);
         let read_count = if stream_available == 0 {
             afb_log_msg!(
                 Notice,
                 None,
                 "async_tls_client {:?}, buffer full close session",
-                context.connection.get_source()
+                ctx.connection.get_source()
             );
-            context.connection.close()?;
+            ctx.connection.close()?;
             return Ok(());
         } else {
             let buffer = &mut lock.buffer[stream_idx..];
-            context.connection.get_data(buffer)?
+            ctx.connection.get_data(buffer)?
         };
 
         // when facing a new exi check how much data should be read
         if stream_idx == 0 {
-            context.payload_len = context.stream.header_check(&lock)?;
-            context.data_len = 0;
+            ctx.payload_len = ctx.stream.header_check(&lock, PayloadMsgId::SAP)?;
+            ctx.data_len = 0;
+        }
+
+        // when facing a new exi check how much data should be read
+        if stream_idx == 0 {
+            let len = ctx.stream.get_payload_len(&lock);
+            if len < 0 {
+            afb_log_msg!(
+                Warning,
+                None,
+                "async_tcp_client: packet ignored (invalid v2g header) size:{}",
+                read_count
+            );
+            } else {
+               ctx.payload_len= len as u32;
+            }
+            ctx.data_len = 0;
         }
         read_count
     };
 
-    // if data send in chunks let's complete exi buffer before processing it
-    context.data_len = context.data_len + read_count;
-    if context.data_len == context.payload_len {
-        // set data len and decode message and place response into stream-out (stream should not be lock_ined)
-        context.stream.finalize(&lock, context.payload_len)?;
+    // fix stream len for decoding
+    ctx.data_len = ctx.data_len + read_count;
+    if ctx.data_len == ctx.payload_len {
+        // fix stream len for decoding
+        ctx.stream.finalize(&lock, ctx.payload_len)?;
+        println!(
+            "**** tls:v2g({})={}",
+            ctx.stream.get_size(&lock),
+            ctx.stream.dump_buffer(&lock, ExiDump::Everything)?
+        );
 
         // decode request and encode response
-        context
-            .controller
-            .handle_exi_doc(&context.stream, &mut lock)?;
+        ctx.ctrl.iso_decode_payload(&ctx.stream, &mut lock)?;
 
         // send response and wipe stream for next request
-        let response = context.stream.get_buffer(&lock);
-        context.connection.put_data(response)?;
-        context.stream.reset(&lock);
+        let response = ctx.stream.get_buffer(&lock);
+        ctx.connection.put_data(response)?;
+        ctx.stream.reset(&lock);
     }
 
     Ok(())
@@ -232,9 +265,9 @@ pub struct AsyncTcpCtx {
 }
 // New TCP client connecting
 pub fn async_tcp_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<(), AfbError> {
-    let context = ctx.get_ref::<AsyncTcpCtx>()?;
+    let ctx = ctx.get_ref::<AsyncTcpCtx>()?;
     if revent == AfbEvtFdPoll::IN.bits() {
-        let tcp_client = context.tcp.accept_client()?;
+        let tcp_client = ctx.tcp.accept_client()?;
 
         AfbEvtFd::new("tcp-client")
             .set_fd(tcp_client.get_sockfd()?)
@@ -245,7 +278,7 @@ pub fn async_tcp_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<
                 connection: tcp_client,
                 data_len: 0,
                 payload_len: 0,
-                controller: IsoController::new()?,
+                ctrl: IsoController::new()?,
                 stream: ExiStream::new(),
             })
             .start()?;
@@ -259,12 +292,12 @@ pub struct AsyncTlsCtx {
 }
 // New TLS connection
 pub fn async_tls_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<(), AfbError> {
-    let context = ctx.get_ref::<AsyncTlsCtx>()?;
+    let ctx = ctx.get_ref::<AsyncTlsCtx>()?;
     if revent == AfbEvtFdPoll::IN.bits() {
-        let tls_client = context.tls.accept_client()?;
+        let tls_client = ctx.tls.accept_client()?;
         let source = tls_client.get_source();
         let sockfd = tls_client.get_sockfd()?;
-        let tls_connection = TlsConnection::new(context.config, tls_client)?;
+        let tls_connection = TlsConnection::new(ctx.config, tls_client)?;
         tls_connection.client_handshake()?;
 
         afb_log_msg!(
@@ -284,7 +317,7 @@ pub fn async_tls_cb(_evtfd: &AfbEvtFd, revent: u32, ctx: &AfbCtxData) -> Result<
                 connection: tls_connection,
                 data_len: 0,
                 payload_len: 0,
-                controller: IsoController::new()?,
+                ctrl: IsoController::new()?,
                 stream: ExiStream::new(),
             })
             .start()?;
