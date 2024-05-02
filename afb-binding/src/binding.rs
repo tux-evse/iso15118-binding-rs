@@ -92,26 +92,26 @@ impl AfbApiControls for ApiUserData {
 pub fn binding_init(rootv4: AfbApiV4, jconf: JsoncObj) -> Result<&'static AfbApi, AfbError> {
     afb_log_msg!(Info, rootv4, "config:{}", jconf);
 
-    let uid = jconf.default::<&'static str>("uid", "iso15118-16")?;
-    let api = jconf.default::<&'static str>("api", uid)?;
-    let info = jconf.default::<&'static str>("info", "")?;
-    let iface = jconf.default::<&'static str>("iface", "eth2")?;
-    let prefix = jconf.default::<u32>("ip6_prefix", 0xFE80)? as u16;
-    let sdp_port = jconf.default::<u32>("sdp_port", 15118)? as u16;
-    let tcp_port = jconf.default::<u32>("tcp_port", 61341)? as u16;
+    let uid = jconf.default("uid", "iso15118-16")?;
+    let api = jconf.default("api", uid)?;
+    let info = jconf.default("info", "")?;
+    let iface = jconf.default("iface", "eth2")?;
+    let prefix = jconf.default("ip6_prefix", 0xFE80)?;
+    let sdp_port = jconf.default("sdp_port", 15118)?;
+    let tcp_port = jconf.default("tcp_port", 61341)?;
 
     let (tls_conf, tls_port) = match jconf.optional::<JsoncObj>("tsl")? {
         None => (None, 0),
         Some(jtls) => {
-            let tls_port = jconf.default::<u32>("port", 64109)? as u16;
-            let cert_chain = jtls.get::<&str>("certs")?;
-            let priv_key = jtls.get::<&str>("key")?;
-            let pin_key = jtls.optional::<&str>("pin")?;
-            let tls_psk = jtls.optional::<&'static str>("pks")?;
-            let tls_trust = jtls.optional::<&'static str>("trust")?;
-            let tls_verbosity = jtls.default::<i32>("verbosity", 1)?;
-            let tls_proto = jtls.optional::<&'static str>("proto")?;
-            let psk_log = jtls.optional::<&'static str>("psk_log")?;
+            let tls_port = jconf.default("port", 64109)?;
+            let cert_chain = jtls.get("certs")?;
+            let priv_key = jtls.get("key")?;
+            let pin_key = jtls.optional("pin")?;
+            let tls_psk = jtls.optional("pks")?;
+            let tls_trust = jtls.optional("trust")?;
+            let tls_verbosity = jtls.default("verbosity", 1)?;
+            let tls_proto = jtls.optional("proto")?;
+            let psk_log = jtls.optional("psk_log")?;
 
             (
                 Some(TlsConfig::new(
@@ -150,7 +150,7 @@ pub fn binding_init(rootv4: AfbApiV4, jconf: JsoncObj) -> Result<&'static AfbApi
         api.set_permission(AfbPermission::new(value));
     };
 
-    if let Ok(value) = jconf.get::<i32>("verbosity") {
+    if let Ok(value) = jconf.get("verbosity") {
         api.set_verbosity(value);
     };
 

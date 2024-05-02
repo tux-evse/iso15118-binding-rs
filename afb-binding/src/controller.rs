@@ -24,7 +24,7 @@ pub struct ControlerConfig {}
 pub struct ControlerState {
     pub status: u32,
     pub protocol: v2g::ProtocolTagId,
-    session_id: iso2::SessionId,
+    session_id: Vec<u8>,
     evccid: iso2::SessionSetupRequest,
 }
 
@@ -38,7 +38,7 @@ impl IsoController {
         let state = Mutex::new(ControlerState {
             status: 0,
             protocol: v2g::ProtocolTagId::Unknown,
-            session_id: iso2::SessionId::null(),
+            session_id: Vec::new(),
             evccid: iso2::SessionSetupRequest::empty(),
         });
         let controler = IsoController {
@@ -80,7 +80,12 @@ impl IsoController {
                 {
                     Ok((rcode, proto)) => {
                         state.protocol = proto.get_schema();
-                        afb_log_msg!(Debug, None, "iso-app-hand: selected protocol:{}", proto.get_name());
+                        afb_log_msg!(
+                            Debug,
+                            None,
+                            "iso-app-hand: selected protocol:{}",
+                            proto.get_name()
+                        );
                         (rcode, proto.get_schema() as u8)
                     }
                     Err(rcode) => {
@@ -94,8 +99,9 @@ impl IsoController {
             }
             v2g::ProtocolTagId::Iso2 => {
                 use iso2::*;
-                let message = Iso2Payload::decode_from_stream(lock)?;
-                match message.get_payload() {
+                let message = Iso2MessageDoc::decode_from_stream(lock)?;
+                let header= message.get_header();
+                match message.get_body()? {
                     Iso2MessageBody::SessionSetupReq(request) => {
                         state.evccid = request.clone();
 
@@ -107,9 +113,9 @@ impl IsoController {
                         );
 
                         // check if we are facing a new session
-                        let session_id = message.get_session();
-                        let status = if !state.session_id.equal(session_id) {
-                            state.session_id = session_id.clone();
+                        let session_id = header.get_session_id();
+                        let status = if &state.session_id != session_id {
+                            state.session_id = session_id.to_vec();
                             ResponseCode::NewSession
                         } else {
                             ResponseCode::Ok
@@ -118,8 +124,7 @@ impl IsoController {
                         // Fulup TBD this should comme from config
                         let evse_id = "tux-evse-001";
                         let body = SessionSetupResponse::new(evse_id, status)?.encode();
-
-                        Iso2MessageExi::encode_to_stream(lock, &body, &state.session_id)?;
+                        Iso2MessageDoc::new(&header, &body).encode_to_stream(lock)?;
                     } //end SessionSetupReq
 
                     Iso2MessageBody::ServiceDiscoveryReq(request) => {
@@ -129,24 +134,21 @@ impl IsoController {
                         };
 
                         afb_log_msg!(Debug, None, "DiscoverySvcReq optional scope:[{}]", scope);
-                        let charging = ServiceCharging::new("Tux-Evse", "IoT-bzh", false);
-                        let service = ServiceOther::new(
-                            56,
-                            "LTE",
-                            "Network",
-                            ServiceCategory::Internet,
-                            true,
-                        );
+                        let mut charging = ServiceCharging::new(29, false);
+                        charging.set_name("Tux-Evse")?.set_scope("IoT-bzh")?;
+
+                        let mut service = ServiceOther::new(56, ServiceCategory::Internet, true);
+                        service.set_name("LTE")?.set_scope("Network")?;
+
                         let transfer = EngyTransfertMode::AcSinglePhase;
 
                         let body = ServiceDiscoveryResponse::new(ResponseCode::Ok)
-                            .add_payment(PaymentOption::Contract)?
-                            .set_charging(&charging)?
+                            .set_charging(&charging)
                             .add_service(&service)?
                             .add_transfer(transfer)?
+                            .add_payment(PaymentOption::Contract)?
                             .encode();
-
-                        Iso2MessageExi::encode_to_stream(lock, &body, &state.session_id)?;
+                        Iso2MessageDoc::new(&header, &body).encode_to_stream(lock)?;
                     } // end DiscoverySvcReq
 
                     Iso2MessageBody::ServiceDetailReq(request) => {
@@ -158,22 +160,22 @@ impl IsoController {
                         );
 
                         let mut param_set_1 = ParamSet::new(1);
-                        param_set_1.add_param("prm_1", Iso2ParamValue::Int16(123))?;
+                        param_set_1.add_param("prm_1", &ParamValue::Int16(123))?;
                         param_set_1
-                            .add_param("prm_2", Iso2ParamValue::Text("snoopy".to_string()))?;
+                            .add_param("prm_2", &ParamValue::Text("snoopy".to_string()))?;
                         param_set_1.add_param(
                             "prm_3",
-                            Iso2ParamValue::PhyValue(PhysicalValue::new(
+                            &ParamValue::PhyValue(PhysicalValue::new(
                                 240,
                                 1,
-                                Isp2PhysicalUnit::Volt,
+                                PhysicalUnit::Volt,
                             )),
                         )?;
 
                         let body = ServiceDetailResponse::new(request.get_id(), ResponseCode::Ok)
                             .add_pset(&param_set_1)?
                             .encode();
-                        Iso2MessageExi::encode_to_stream(lock, &body, &state.session_id)?;
+                        Iso2MessageDoc::new(&header, &body).encode_to_stream(lock)?;
                     } // end ServiceDetailReq
 
                     _ => {
