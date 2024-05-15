@@ -9,15 +9,16 @@ binding:
     path: ${CARGO_TARGET_DIR}debug/libafb_iso15118.so
     info: RUST ISO-15118 EVSE binding
     iface: ${IFACE_EVSE} # default lo
-    # ip6_prefix: 0xFE80       # default 0
+    ip6_prefix: 0 # default 0xFE80
     sdp_port:    15118
     tcp_port: 61341
     tls:
       port: 64109
-      trust: ${PKI_TLS_DIR}/_trialog/
-      certs: ${PKI_TLS_DIR}/_trialog/secc-chain.pem
-      key: ${PKI_TLS_DIR}/_trialog/secc20Cert.key
-      pin: 123456
+      # certs_dir: ${PKI_TLS_DIR}
+      format: der #default pem
+      certs: ${PKI_TLS_DIR}/_root.der
+      key: ${PKI_TLS_DIR}/_root.key.der
+      #pin: "123456"
       proto: SECURE128:-VERS-SSL3.0:-VERS-TLS1.0:-ARCFOUR-128:+PSK:+DHE-PSK
       psk_log: /tmp/tls-keys-simu.log
 

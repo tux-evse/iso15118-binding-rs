@@ -111,6 +111,13 @@ Debugging target eth2
 # ssh root@phytec-power.tuxevse.vpn "tcpdump -s0 -U -n -w - -i eth2" | wireshark -i -
 ```
 
+Create development testing certificate
+
+```
+cd afb-test/certs; ./mkcerts.sh
+```
+
+
 Trialog
 
 Note: I had to unconnect/reconnect my ethernet laptop to get combo starting talking IPV6
@@ -135,8 +142,6 @@ Gnu Allocate credential  gnutls_certificate_allocate_credentials
  gnutls-cli -l --priority "NORMAL:-VERS-TLS-ALL:+VERS-TLS1.2:-VERS-TLS1.3"
 
 # create chain of true from certificate list
-
-
 
 # assemble chain of trust as a unique .pem
 cat _trialog/secc20Cert.pem _trialog/cpo20SubCA2.pem _trialog/cpo20SubCA1.pem > _trialog/secc-chain.pem

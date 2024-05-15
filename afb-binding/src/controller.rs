@@ -25,7 +25,7 @@ pub struct ControlerState {
     pub status: u32,
     pub protocol: v2g::ProtocolTagId,
     session_id: Vec<u8>,
-    evccid: iso2::SessionSetupRequest,
+    evccid: iso2_exi::SessionSetupRequest,
 }
 
 pub struct IsoController {
@@ -39,7 +39,7 @@ impl IsoController {
             status: 0,
             protocol: v2g::ProtocolTagId::Unknown,
             session_id: Vec::new(),
-            evccid: iso2::SessionSetupRequest::empty(),
+            evccid: iso2_exi::SessionSetupRequest::empty(),
         });
         let controler = IsoController {
             data_set: state,
@@ -98,11 +98,11 @@ impl IsoController {
                 v2g::SupportedAppProtocolExi::encode_to_stream(lock, &v2g_response)?;
             }
             v2g::ProtocolTagId::Iso2 => {
-                use iso2::*;
-                let message = Iso2MessageDoc::decode_from_stream(lock)?;
-                let header= message.get_header();
+                use iso2_exi::*;
+                let message = ExiMessageDoc::decode_from_stream(lock)?;
+                let header = message.get_header();
                 match message.get_body()? {
-                    Iso2MessageBody::SessionSetupReq(request) => {
+                    MessageBody::SessionSetupReq(request) => {
                         state.evccid = request.clone();
 
                         afb_log_msg!(
@@ -124,10 +124,10 @@ impl IsoController {
                         // Fulup TBD this should comme from config
                         let evse_id = "tux-evse-001";
                         let body = SessionSetupResponse::new(evse_id, status)?.encode();
-                        Iso2MessageDoc::new(&header, &body).encode_to_stream(lock)?;
+                        ExiMessageDoc::new(&header, &body).encode_to_stream(lock)?;
                     } //end SessionSetupReq
 
-                    Iso2MessageBody::ServiceDiscoveryReq(request) => {
+                    MessageBody::ServiceDiscoveryReq(request) => {
                         let scope = match request.get_scope() {
                             Some(value) => value.to_string(),
                             None => "no-scope-defined".to_string(),
@@ -148,10 +148,10 @@ impl IsoController {
                             .add_transfer(transfer)?
                             .add_payment(PaymentOption::Contract)?
                             .encode();
-                        Iso2MessageDoc::new(&header, &body).encode_to_stream(lock)?;
+                        ExiMessageDoc::new(&header, &body).encode_to_stream(lock)?;
                     } // end DiscoverySvcReq
 
-                    Iso2MessageBody::ServiceDetailReq(request) => {
+                    MessageBody::ServiceDetailReq(request) => {
                         afb_log_msg!(
                             Debug,
                             None,
@@ -160,22 +160,25 @@ impl IsoController {
                         );
 
                         let mut param_set_1 = ParamSet::new(1);
-                        param_set_1.add_param("prm_1", &ParamValue::Int16(123))?;
                         param_set_1
-                            .add_param("prm_2", &ParamValue::Text("snoopy".to_string()))?;
-                        param_set_1.add_param(
-                            "prm_3",
-                            &ParamValue::PhyValue(PhysicalValue::new(
-                                240,
-                                1,
-                                PhysicalUnit::Volt,
-                            )),
-                        )?;
+                            .add_param(&ParamTuple::new("prm_1", &ParamValue::Int16(123))?)?
+                            .add_param(&ParamTuple::new(
+                                "prm_2",
+                                &ParamValue::Text("snoopy".to_string()),
+                            )?)?
+                            .add_param(&ParamTuple::new(
+                                "prm_3",
+                                &ParamValue::PhyValue(PhysicalValue::new(
+                                    240,
+                                    1,
+                                    PhysicalUnit::Volt,
+                                )),
+                            )?)?;
 
                         let body = ServiceDetailResponse::new(request.get_id(), ResponseCode::Ok)
                             .add_pset(&param_set_1)?
                             .encode();
-                        Iso2MessageDoc::new(&header, &body).encode_to_stream(lock)?;
+                        ExiMessageDoc::new(&header, &body).encode_to_stream(lock)?;
                     } // end ServiceDetailReq
 
                     _ => {

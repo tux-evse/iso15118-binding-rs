@@ -9,7 +9,8 @@
             "program": "afb-binder",
             "env": {
                 "IFACE_EVSE": "evse-veth",
-                "PKI_TLS_DIR": "afb-test/etc",
+                "IFACE_PREFIX": "0xFE80",
+                "PKI_TLS_DIR": "afb-test/certs",
                 "LD_LIBRARY_PATH": "/usr/local/lib64",
                 "SSLKEYLOGFILE": "/tmp/gnu-tls.log"
             },
@@ -35,14 +36,15 @@
                 "LD_LIBRARY_PATH": "/usr/local/lib64",
                 "IFACE_PEV": "veth-dbg",
                 "IFACE_EVSE": "veth-dbg",
-                "PKI_TLS_DIR": "afb-test/etc"
+                "IFACE_PREFIX": "0xFE80",
+                "PKI_TLS_DIR": "afb-test/certs"
             },
             "args": [
                 "-vv",
                 "--monitoring",
                 "--trap-faults=0",
-                "--config=afb-binding/etc/binder-iso15118.json",
-                "--config=afb-binding/etc/binding-iso15118.json",
+                "--config=afb-binding/etc/binder-iso15118.yaml",
+                "--config=afb-binding/etc/binding-iso15118.yaml",
                 "--config=afb-test/etc/binding-isoslac-test.json",
                 "--config=afb-test/etc/binding-isotap-test.json",
             ],
@@ -60,16 +62,15 @@
             "program": "afb-binder",
             "env": {
                 "LD_LIBRARY_PATH": "/usr/local/lib64",
-                "IFACE_PEV": "enp0s31f6",
                 "IFACE_EVSE": "enp0s31f6",
-                "PKI_TLS_DIR": "afb-test/etc"
+                "IFACE_PREFIX": "0xFE80",
+                "PKI_TLS_DIR": "afb-test/certs"
             },
             "args": [
                 "-vv",
                 "--monitoring",
                 "--trap-faults=0",
-                "--config=afb-binding/etc/binder-iso15118.json",
-                "--config=afb-binding/etc/binding-iso15118.json",
+                "--config=afb-binding/etc/binding-iso15118.yaml",
             ],
             "cwd": "${workspaceFolder}",
             "initCommands": [
@@ -78,23 +79,22 @@
             ]
         },
         {
-            "name": "Desktop trialog iso15118",
+            "name": "Desktop tls-1.3 loopback",
             "type": "lldb",
             "preLaunchTask": "binding-native-build",
             "request": "launch",
             "program": "afb-binder",
             "env": {
                 "LD_LIBRARY_PATH": "/usr/local/lib64",
-                "IFACE_PEV": "eth0",
-                "IFACE_EVSE": "eth0",
-                "PKI_TLS_DIR": "afb-test/etc"
+                "IFACE_EVSE": "lo",
+                "IFACE_PREFIX": "0",
+                "PKI_TLS_DIR": "afb-test/certs"
             },
             "args": [
                 "-vv",
                 "--monitoring",
                 "--trap-faults=0",
-                "--config=afb-binding/etc/binder-iso15118.json",
-                "--config=afb-binding/etc/binding-iso15118.json",
+                "--config=afb-binding/etc/binding-iso15118.yaml",
             ],
             "cwd": "${workspaceFolder}",
             "initCommands": [

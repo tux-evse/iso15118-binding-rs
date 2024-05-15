@@ -100,15 +100,16 @@ pub fn binding_init(rootv4: AfbApiV4, jconf: JsoncObj) -> Result<&'static AfbApi
     let sdp_port = jconf.default("sdp_port", 15118)?;
     let tcp_port = jconf.default("tcp_port", 61341)?;
 
-    let (tls_conf, tls_port) = match jconf.optional::<JsoncObj>("tsl")? {
+    let (tls_conf, tls_port) = match jconf.optional::<JsoncObj>("tls")? {
         None => (None, 0),
         Some(jtls) => {
             let tls_port = jconf.default("port", 64109)?;
+            let cert_format = jtls.default("format", "pem")?;
             let cert_chain = jtls.get("certs")?;
             let priv_key = jtls.get("key")?;
             let pin_key = jtls.optional("pin")?;
             let tls_psk = jtls.optional("pks")?;
-            let tls_trust = jtls.optional("trust")?;
+            let tls_trust = jtls.optional("certs_dir")?;
             let tls_verbosity = jtls.default("verbosity", 1)?;
             let tls_proto = jtls.optional("proto")?;
             let psk_log = jtls.optional("psk_log")?;
@@ -119,6 +120,7 @@ pub fn binding_init(rootv4: AfbApiV4, jconf: JsoncObj) -> Result<&'static AfbApi
                     priv_key,
                     pin_key,
                     tls_trust,
+                    cert_format,
                     tls_psk,
                     psk_log,
                     tls_verbosity,
