@@ -84,23 +84,30 @@ export IFACE=ethX
 socat -u UDP6-RECV:15118,ipv6-add-membership='[ff02::01]':$IFACE -
 ```
 
-Send TCP data
+Send TCP data on loopback
 ```
 socat -6 'TCP-CONNECT:[::1]:61341' stdio
 ```
 
-Sending TLS data
+Sending TLS data on loopback k (TCP/TLS only test)
 ```
-# using lo loopback (TCP/TLS only test)
-socat -6 "OPENSSL-CONNECT:[::1]:64109,cert=afb-test/etc/_client-cert.pem,verify=0,snihost=tux-evse," stdio
+# Do not check server certificate (sni require but not used)
+socat -6 "OPENSSL-CONNECT:[::1]:64109,snihost=xxx,key=afb-test/certs/_client_key.pem,verify=0" stdio
 
-# enforcing TLS-1.3 (require socat 1.7.4++)
-socat -6 "OPENSSL-CONNECT:[::1]:64109,cert=afb-test/etc/_client-cert.pem,openssl-min-proto-version=TLS1.3,snihost=tux-evse,verify=0" stdio
+# check server certificate (require /etc/hosts=> '::1 ipv6-localhost tux-evse-secure-by-iot-bzh')
+socat -6 "OPENSSL-CONNECT:tux-evse-secure-by-iot-bzh:64109,snihost=tux-evse-secure-by-iot-bzh,key=afb-test/certs/_client_key.pem,cafile=afb-test/certs/_server_chain.pem,verify=1" stdio
+
+# enforce tls 1.2 with server certificate check
+socat -6 "OPENSSL-CONNECT:tux-evse-secure-by-iot-bzh:64109,snihost=tux-evse-secure-by-iot-bzh,key=afb-test/certs/_client_key.pem,cafile=afb-tt/certs/_server_chain.pem,verify=1,openssl-max-proto-version=TLS1.2" stdio
+
+# enforce tls 1.3 with server certificate check
+socat -6 "OPENSSL-CONNECT:tux-evse-secure-by-iot-bzh:64109,snihost=tux-evse-secure-by-iot-bzh,key=afb-test/certs/_client_key.pem,cafile=afb-tt/certs/_server_chain.pem,verify=1,openssl-min-proto-version=TLS1.3" stdio
+
 
 # Fulup TBD check with Stephane to fix bash
 export IFACE_EVSE=eth-xxx
 export VETH_IPV6=`ip -6 addr show dev ${IFACE_EVSE} | grep inet6| grep fe80 | awk '{print $2}' | awk -F '/' '{print $1}'`; echo "VETH_IPV6=$VETH_IPV6"
-socat -6 "OPENSSL-CONNECT:[${VETH_IPV6}%${IFACE_EVSE}]:64109,cert=afb-test/etc/_client-cert.pem,verify=0,openssl-min-proto-version=TLS1.3,snihost=tux-evse" stdio
+socat -6 "OPENSSL-CONNECT:[${VETH_IPV6}%${IFACE_EVSE}]:64109,cert=afb-test/etc/_client-cert.pem,verify=0,openssl-min-proto-version=TLS1.3,snihost=tux-evse-secure-by-iot-bzh" stdio
 socat -6 OPENSSL-CONNECT:[${VETH_IPV6}%${IFACE_EVSE}]:64109,cert=afb-test/etc/_client-cert.pem,cert=afb-test/etc/_trialog-oem-cert.pem,openssl-min-proto-version=TLS1.3 stdio
 
 socat -6 "OPENSSL-CONNECT:[${VETH_IPV6}%${IFACE_EVSE}]:64109,cert=_trialog/vehicle20-chain.pem,verify=1,openssl-min-proto-version=TLS1.3,cafile=_trialog/v2g20RootCA.pem" stdio
@@ -157,7 +164,7 @@ cat _trialog/secc20Cert.pem _trialog/cpo20SubCA2.pem _trialog/cpo20SubCA1.pem > 
 certtool --p7-generate --load-certificate _trialog/secc-chain.pem  >_trialog/secc-chain.pks7
 
 # sign certificate chain
-certtool --p7-sign --load-privkey _trialog/secc20Cert.key  --load-certificate _trialog/secc-chain.pks7  >_trialog/sess_chain.cert
+certtool --p7-sign --load-privkey _trialog/secc20Cert_key  --load-certificate _trialog/secc-chain.pks7  >_trialog/sess_chain.cert
 
 # Generating a new certificate for Trialog
 ```
@@ -168,7 +175,7 @@ certtool --generate-privkey --outfile tux-evese-key.pem
 certtool --generate-request --load-privkey tux-evese-key.pem --outfile tux-evese-csr.pem
 
 # sign certificate
-certtool --generate-certificate --load-request tux-evese-csr.pem --load-ca-certificate _trialog/v2g20RootCA.pem --load-ca-privkey _trialog/v2g20RootCA.key --outfile tux-evese-cert.pem
+certtool --generate-certificate --load-request tux-evese-csr.pem --load-ca-certificate _trialog/v2g20RootCA.pem --load-ca-privkey _trialog/v2g20RootCA_key --outfile tux-evese-cert.pem
 
 # verify generated certificate
  certtool --certificate-info --infile _trialog/secc-chain.pem

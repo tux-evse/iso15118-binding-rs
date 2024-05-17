@@ -14,11 +14,11 @@ binding:
     tcp_port: 61341
     tls:
       port: 64109
-      # certs_dir: ${PKI_TLS_DIR}
-      format: der #default pem
-      certs: ${PKI_TLS_DIR}/_root.der
-      key: ${PKI_TLS_DIR}/_root.key.der
+      certs_trust: ${PKI_TLS_DIR} # optional client cert root of trust
+      # format: pem|der (default pem)
+      certs: ${PKI_TLS_DIR}/_server.pem
+      key: ${PKI_TLS_DIR}/_server_key.pem
       #pin: "123456"
       proto: SECURE128:-VERS-SSL3.0:-VERS-TLS1.0:-ARCFOUR-128:+PSK:+DHE-PSK
-      psk_log: /tmp/tls-keys-simu.log
+      psk_log: /tmp/tls-keys-server.log
 
