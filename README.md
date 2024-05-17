@@ -111,10 +111,17 @@ Debugging target eth2
 # ssh root@phytec-power.tuxevse.vpn "tcpdump -s0 -U -n -w - -i eth2" | wireshark -i -
 ```
 
+Saving TLS preshare key with pcap file
+```
+editcap --inject-secrets tls,hello-tls-1.3.keylog  hello-tls-1.3.pcapng tls-hello-w-keys.pcapng
+```
+
 Create development testing certificate
 
+Create a list of testing certificates. Certificate are prefix by '_' which prevent from uploading then with git.
+
 ```
-cd afb-test/certs; ./mkcerts.sh
+./afb-test/certs/mkcerts.sh dest_dir
 ```
 
 

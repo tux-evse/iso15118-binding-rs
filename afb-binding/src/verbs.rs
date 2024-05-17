@@ -14,6 +14,7 @@ use crate::prelude::*;
 use afbv4::prelude::*;
 use iso15118::prelude::{v2g::*, *};
 use nettls::prelude::*;
+use std::str;
 //use typesv4::prelude::*;
 
 use std::mem;
@@ -213,6 +214,9 @@ fn async_tls_client_cb(
             ctx.connection.get_data(buffer)?
         };
 
+        let text= str::from_utf8(&lock.buffer[stream_idx..]).unwrap();
+        println!("*** buffer={}", text);
+
         // when facing a new exi check how much data should be read
         if stream_idx == 0 {
             ctx.payload_len = ctx.stream.header_check(&lock, PayloadMsgId::SAP)?;
@@ -226,7 +230,7 @@ fn async_tls_client_cb(
             afb_log_msg!(
                 Warning,
                 None,
-                "async_tcp_client: packet ignored (invalid v2g header) size:{}",
+                "async_tls_client: packet ignored (invalid v2g header) size:{}",
                 read_count
             );
             } else {
