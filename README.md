@@ -98,10 +98,10 @@ socat -6 "OPENSSL-CONNECT:[::1]:64109,snihost=xxx,key=afb-test/certs/_client_key
 socat -6 "OPENSSL-CONNECT:tux-evse-secure-by-iot-bzh:64109,snihost=tux-evse-secure-by-iot-bzh,key=afb-test/certs/_client_key.pem,cafile=afb-test/certs/_server_chain.pem,verify=1" stdio
 
 # enforce tls 1.2 with server certificate check
-socat -6 "OPENSSL-CONNECT:tux-evse-secure-by-iot-bzh:64109,snihost=tux-evse-secure-by-iot-bzh,key=afb-test/certs/_client_key.pem,cafile=afb-tt/certs/_server_chain.pem,verify=1,openssl-max-proto-version=TLS1.2" stdio
+socat -6 "OPENSSL-CONNECT:tux-evse-secure-by-iot-bzh:64109,snihost=tux-evse-secure-by-iot-bzh,key=afb-test/certs/_client_key.pem,cafile=afb-test/certs/_server_chain.pem,verify=1,openssl-max-proto-version=TLS1.2" stdio
 
 # enforce tls 1.3 with server certificate check
-socat -6 "OPENSSL-CONNECT:tux-evse-secure-by-iot-bzh:64109,snihost=tux-evse-secure-by-iot-bzh,key=afb-test/certs/_client_key.pem,cafile=afb-tt/certs/_server_chain.pem,verify=1,openssl-min-proto-version=TLS1.3" stdio
+socat -6 "OPENSSL-CONNECT:tux-evse-secure-by-iot-bzh:64109,snihost=tux-evse-secure-by-iot-bzh,key=afb-test/certs/_client_key.pem,cafile=afb-test/certs/_server_chain.pem,verify=1,openssl-min-proto-version=TLS1.3" stdio
 
 
 # Fulup TBD check with Stephane to fix bash
