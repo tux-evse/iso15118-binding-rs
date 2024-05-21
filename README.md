@@ -118,6 +118,11 @@ Debugging target eth2
 # ssh root@phytec-power.tuxevse.vpn "tcpdump -s0 -U -n -w - -i eth2" | wireshark -i -
 ```
 
+Port mortem debug with wireshark
+```
+wireshark afb-test/trace-logs/hello-tls-1.3.pcapng -o tls.keylog_file:afb-test/trace-logs/hello-tls-1.3.keylog
+```
+
 Saving TLS preshare key with pcap file
 ```
 editcap --inject-secrets tls,hello-tls-1.3.keylog  hello-tls-1.3.pcapng tls-hello-w-keys.pcapng
