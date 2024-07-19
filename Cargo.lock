@@ -135,6 +135,7 @@ dependencies = [
 [[package]]
 name = "iso15118"
 version = "0.0.1"
+source = "git+https://github.com/tux-evse/iso15118-encoders-rs.git?branch=main#a98ffa19d5552966a1d18ee532f78af7b0dd863b"
 dependencies = [
  "bindgen",
  "cc",
@@ -234,6 +235,7 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 [[package]]
 name = "nettls"
 version = "0.0.1"
+source = "git+https://github.com/tux-evse/iso15118-network-rs.git?branch=main#9c7aa5f6f2a2bc674e1c59fc3ced39373101e6cf"
 dependencies = [
  "bindgen",
  "cc",

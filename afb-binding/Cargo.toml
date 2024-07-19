@@ -10,8 +10,8 @@ build = "etc/build.rs"
 afbv4 = {git= "https://github.com/redpesk-common/afb-librust", branch="master", optional = true}
 serde = { version = "1.0", features = ["derive"] }
 serde_json={ version= "1.0"}
-iso15118= {path ="../../iso15118-encoders-rs"}
-nettls= {path ="../../iso15118-network-rs"}
+iso15118= {git= "https://github.com/tux-evse/iso15118-encoders-rs.git", branch="main"}
+nettls= {git= "https://github.com/tux-evse/iso15118-network-rs.git", branch="main"}
 
 [lib]
 name = "afb_iso15118"

@@ -9,7 +9,7 @@ edition = "2021"
 afbv4 = {git= "https://github.com/redpesk-common/afb-librust", branch="master", optional = true}
 serde = { version = "1.0", features = ["derive"] }
 serde_json={ version= "1.0"}
-iso15118= {path ="../../iso15118-encoders-rs"}
+iso15118= {git= "https://github.com/tux-evse/iso15118-encoders-rs.git", branch="main"}
 
 [[example]]
 # optional test use:  clear && cargo build --example iso15118_test
